@@ -241,7 +241,7 @@
     <div class="field"><label>Categoría</label><select id="movCat"></select></div>
     <div class="field" id="movSocioWrap"><label>Socio (si es aporte)</label><select id="movSocio"><option value="">—</option></select></div>
   </div>
-  <div class="field"><label>Valor (COP)</label><input type="number" id="movValor" inputmode="numeric" min="1" step="1" required></div>
+  <div class="field"><label>Valor (COP)</label><input type="text" id="movValor" inputmode="numeric" oninput="fmtMiles(this)" required></div>
   <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgMov.close()">Cancelar</button><button class="btn">Guardar</button></div>
 </form></dialog>
 
@@ -273,7 +273,7 @@
   <h3 id="dlgSocioTitle">Socio</h3>
   <input type="hidden" id="socId">
   <div class="field"><label>Nombre</label><input id="socNombre" required></div>
-  <div class="field"><label>Compromiso de inversión (COP)</label><input type="number" id="socCompromiso" inputmode="numeric" min="0" step="1" required></div>
+  <div class="field"><label>Compromiso de inversión (COP)</label><input type="text" id="socCompromiso" inputmode="numeric" oninput="fmtMiles(this)" required></div>
   <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgSocio.close()">Cancelar</button><button class="btn">Guardar</button></div>
 </form></dialog>
 
@@ -281,7 +281,7 @@
   <h3 id="dlgCapTitle">Capítulo de presupuesto</h3>
   <input type="hidden" id="capId">
   <div class="field"><label>Nombre (también es la categoría de egresos)</label><input id="capNombre" required></div>
-  <div class="field"><label>Presupuesto (COP)</label><input type="number" id="capValor" inputmode="numeric" min="0" step="1" required></div>
+  <div class="field"><label>Presupuesto (COP)</label><input type="text" id="capValor" inputmode="numeric" oninput="fmtMiles(this)" required></div>
   <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgCapitulo.close()">Cancelar</button><button class="btn">Guardar</button></div>
 </form></dialog>
 
@@ -381,6 +381,10 @@ async function escribir(fn){
 
 // ================== helpers ==================
 const money = v => fmt.format(v||0);
+// Separador de miles (es-CO usa punto) mientras se escribe
+function agrupar(n){ const s=String(n).replace(/\D/g,''); return s? Number(s).toLocaleString('es-CO') : ''; }
+function desagrupar(v){ return +String(v).replace(/\D/g,'') || 0; }
+function fmtMiles(el){ el.value = agrupar(el.value); }
 const byFecha = (a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || 0;
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function catsEgreso(){ return state.capitulos.map(c=>c.nombre); }
@@ -423,8 +427,8 @@ function renderResumen(){
   $('resAlertas').innerHTML = al || '<div class="alert good">✅ Sin alertas por ahora.</div>';
 
   $('ventasBody').innerHTML = state.ventas.map(v=>`
-    <tr><td>${esc(v.nombre)}</td><td class="num"><input type="number" inputmode="numeric" class="venta-input" value="${v.valor}"
-      onchange="cambiarVenta('${v.id}', this.value)"></td></tr>`).join('')
+    <tr><td>${esc(v.nombre)}</td><td class="num"><input type="text" inputmode="numeric" class="venta-input" value="${agrupar(v.valor)}"
+      oninput="fmtMiles(this)" onchange="cambiarVenta('${v.id}', this.value)"></td></tr>`).join('')
     + `<tr><td><b>Total venta estimada</b></td><td class="num"><b>${money(ventas)}</b></td></tr>`;
 
   const ult = [...state.movimientos].sort(byFecha).slice(-8).reverse();
@@ -574,14 +578,14 @@ function abrirMov(id){
   $('movConcepto').value = m? m.concepto:'';
   $('movSocio').innerHTML = '<option value="">—</option>'+state.socios.map(s=>`<option ${m&&m.socio===s.nombre?'selected':''}>${esc(s.nombre)}</option>`).join('');
   if(m) $('movCat').value = m.categoria;
-  $('movValor').value = m? m.valor:'';
+  $('movValor').value = m? agrupar(m.valor):'';
   dlgMov.showModal();
 }
 async function guardarMov(ev){
   ev.preventDefault();
   const id = $('movId').value;
   const o = { fecha:$('movFecha').value, tipo:$('movTipo').value, concepto:$('movConcepto').value.trim(),
-    categoria:$('movCat').value, socio: $('movTipo').value==='i'? $('movSocio').value:'', valor:+$('movValor').value };
+    categoria:$('movCat').value, socio: $('movTipo').value==='i'? $('movSocio').value:'', valor:desagrupar($('movValor').value) };
   const ok = await escribir(async ()=>{
     if(id) await api('PATCH','movimientos?id=eq.'+id, o);
     else await api('POST','movimientos', o);
@@ -630,13 +634,13 @@ function borrarMatMov(id){ if(confirm('¿Eliminar este movimiento de inventario 
 function abrirSocio(id){
   const s = id? state.socios.find(x=>x.id===id):null;
   $('dlgSocioTitle').textContent = s? 'Editar socio':'Nuevo socio';
-  $('socId').value = s? s.id:''; $('socNombre').value = s? s.nombre:''; $('socCompromiso').value = s? s.compromiso:'';
+  $('socId').value = s? s.id:''; $('socNombre').value = s? s.nombre:''; $('socCompromiso').value = s? agrupar(s.compromiso):'';
   dlgSocio.showModal();
 }
 async function guardarSocio(ev){
   ev.preventDefault();
   const id = $('socId').value;
-  const o = {nombre:$('socNombre').value.trim(), compromiso:+$('socCompromiso').value};
+  const o = {nombre:$('socNombre').value.trim(), compromiso:desagrupar($('socCompromiso').value)};
   const ok = await escribir(async ()=>{
     if(id){
       const s = state.socios.find(x=>x.id===id);
@@ -651,13 +655,13 @@ function borrarSocio(id){ if(confirm('¿Eliminar este socio para todos? (sus apo
 function abrirCapitulo(id){
   const c = id? state.capitulos.find(x=>x.id===id):null;
   $('dlgCapTitle').textContent = c? 'Editar capítulo':'Nuevo capítulo';
-  $('capId').value = c? c.id:''; $('capNombre').value = c? c.nombre:''; $('capValor').value = c? c.presupuesto:'';
+  $('capId').value = c? c.id:''; $('capNombre').value = c? c.nombre:''; $('capValor').value = c? agrupar(c.presupuesto):'';
   dlgCapitulo.showModal();
 }
 async function guardarCapitulo(ev){
   ev.preventDefault();
   const id = $('capId').value;
-  const o = {nombre:$('capNombre').value.trim(), presupuesto:+$('capValor').value};
+  const o = {nombre:$('capNombre').value.trim(), presupuesto:desagrupar($('capValor').value)};
   const ok = await escribir(async ()=>{
     if(id){
       const c = state.capitulos.find(x=>x.id===id);
@@ -690,7 +694,7 @@ async function guardarEtapa(ev){
 }
 function borrarEtapa(id){ if(confirm('¿Eliminar esta etapa para todos?')) escribir(()=>api('DELETE','etapas?id=eq.'+id)); }
 
-function cambiarVenta(id, valor){ escribir(()=>api('PATCH','ventas?id=eq.'+id, {valor:+valor||0})); }
+function cambiarVenta(id, valor){ escribir(()=>api('PATCH','ventas?id=eq.'+id, {valor:desagrupar(valor)})); }
 
 // ================== XLSX (sin librerías: ZIP sin compresión + SpreadsheetML) ==================
 const crcTable = (()=>{ const t=new Uint32Array(256);
