@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#23282E">
+<title>Casa La Triada — Gestor de Obra</title>
+<style>
+  :root{
+    --bg:#ECEEEA; --card:#FFFFFF; --field:#FFFFFF; --ink:#1D2126; --muted:#6B7178;
+    --line:#DCDFDA; --brand:#D95B12; --brand-ink:#FFFFFF;
+    --good:#22824F; --good-soft:#E2F2E9; --bad:#C2372F; --bad-soft:#FAE7E4;
+    --warn:#8A6A00; --warn-soft:#F7EFD3; --info:#2B5F8F; --info-soft:#E5EEF6;
+    --hdr1:#23282E; --hdr2:#3A424B; --hdr-ink:#F4F5F2;
+    --shadow:0 1px 3px rgba(20,23,26,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171A; --card:#1E2328; --field:#262C32; --ink:#E8EAE6; --muted:#98A0A8;
+      --line:#333A41; --brand:#FF8A3D; --brand-ink:#221204;
+      --good:#4CC38A; --good-soft:#1B2F26; --bad:#F06A5E; --bad-soft:#39211E;
+      --warn:#E5B84B; --warn-soft:#332B14; --info:#7FB3DC; --info-soft:#1D2B37;
+      --hdr1:#101317; --hdr2:#1E252C; --hdr-ink:#EDEFEA;
+      --shadow:0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg);}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--ink); font-size:15px; line-height:1.45; -webkit-text-size-adjust:100%;}
+  header{background:linear-gradient(150deg,var(--hdr1),var(--hdr2)); color:var(--hdr-ink);
+    padding:calc(12px + env(safe-area-inset-top)) 14px 0; position:sticky; top:0; z-index:40;}
+  .hdr-top{display:flex; align-items:center; gap:10px; max-width:1100px; margin:0 auto;}
+  .hdr-top h1{font-size:17px; font-weight:800; letter-spacing:.2px; line-height:1.15;}
+  .hdr-top h1 small{display:block; font-size:11px; font-weight:500; opacity:.7; letter-spacing:.4px;}
+  .saldo-chip{margin-left:auto; text-align:right;}
+  .saldo-chip .lbl{font-size:10px; opacity:.7; text-transform:uppercase; letter-spacing:.6px;}
+  .saldo-chip .val{font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--brand); filter:brightness(1.35);}
+  nav{max-width:1100px; margin:10px auto 0; display:flex; gap:2px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+  nav::-webkit-scrollbar{display:none;}
+  nav button{flex:0 0 auto; border:none; background:transparent; color:var(--hdr-ink); opacity:.65;
+    padding:10px 13px 12px; font-size:13.5px; font-weight:700; cursor:pointer; border-radius:10px 10px 0 0; white-space:nowrap; font-family:inherit;}
+  nav button.active{background:var(--bg); color:var(--ink); opacity:1;}
+  main{max-width:1100px; margin:0 auto; padding:16px 12px 100px;}
+  section{display:none;} section.active{display:block;}
+  h2{font-size:15px; margin:20px 0 8px; letter-spacing:.2px;}
+  h2:first-child{margin-top:0;}
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; box-shadow:var(--shadow);}
+  .card .lbl{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;}
+  .card .val{font-size:19px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .card .sub{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .card.good .val{color:var(--good);} .card.bad .val{color:var(--bad);} .card.warn .val{color:var(--warn);}
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin-bottom:14px; overflow-x:auto; box-shadow:var(--shadow);}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; min-width:540px;}
+  th{font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); text-align:left; padding:7px 7px; border-bottom:2px solid var(--line);}
+  td{padding:8px 7px; border-bottom:1px solid var(--line); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td.num, th.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .pos{color:var(--good); font-weight:700;} .neg{color:var(--bad); font-weight:700;}
+  .tag{display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--info-soft); color:var(--info); white-space:nowrap;}
+  .tag.aporte{background:var(--good-soft); color:var(--good);}
+  .tag.rojo{background:var(--bad-soft); color:var(--bad);}
+  .btn{border:none; border-radius:11px; padding:11px 16px; font-size:14px; font-weight:700; cursor:pointer;
+    background:var(--brand); color:var(--brand-ink); font-family:inherit; touch-action:manipulation;}
+  .btn.sec{background:var(--card); color:var(--ink); border:1px solid var(--line);}
+  .btn.sm{padding:6px 12px; font-size:12.5px; border-radius:9px;}
+  .btn.ghost{background:transparent; color:var(--muted); border:none; padding:6px 7px; font-size:14px;}
+  .btn:disabled{opacity:.5; cursor:wait;}
+  .btn:focus-visible, nav button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{outline:2px solid var(--brand); outline-offset:2px;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;}
+  .toolbar input[type=search], .toolbar select{padding:10px 12px; border:1px solid var(--line); border-radius:11px; font-size:14px; background:var(--field); color:var(--ink); font-family:inherit;}
+  .bar{height:8px; background:var(--line); border-radius:6px; overflow:hidden; min-width:80px;}
+  .bar i{display:block; height:100%; background:var(--good); border-radius:6px;}
+  .bar i.over{background:var(--bad);} .bar i.warn{background:var(--warn);}
+  .alert{border-radius:12px; padding:10px 13px; margin-bottom:8px; font-size:13.5px;}
+  .alert.warn{background:var(--warn-soft); color:var(--warn);}
+  .alert.bad{background:var(--bad-soft); color:var(--bad);}
+  .alert.good{background:var(--good-soft); color:var(--good);}
+  dialog{border:none; border-radius:18px; padding:0; max-width:430px; width:calc(100vw - 28px);
+    background:var(--card); color:var(--ink); box-shadow:0 24px 70px rgba(0,0,0,.35); margin:auto;}
+  dialog::backdrop{background:rgba(10,12,14,.55);}
+  dialog form{padding:18px;}
+  dialog h3{font-size:15.5px; margin-bottom:14px;}
+  .field{margin-bottom:11px;}
+  .field label{display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px;}
+  .field input, .field select, .field textarea{width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:11px;
+    font-size:15px; font-family:inherit; background:var(--field); color:var(--ink);}
+  .field textarea{resize:vertical; min-height:54px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .dlg-actions{display:flex; justify-content:flex-end; gap:8px; margin-top:14px;}
+  .muted{color:var(--muted); font-size:12.5px;}
+  .stock-low{color:var(--bad); font-weight:800;}
+  .bottombar{position:fixed; left:0; right:0; bottom:0; z-index:30; background:var(--card); border-top:1px solid var(--line);
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom)); display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;}
+  .sync{font-size:11.5px; color:var(--muted); white-space:nowrap;}
+  .sync.err{color:var(--bad); font-weight:700;}
+  .venta-input{width:150px; text-align:right; border:1px solid var(--line); border-radius:9px; padding:7px 9px;
+    background:var(--field); color:var(--ink); font-size:14px; font-variant-numeric:tabular-nums; font-family:inherit;}
+  #cargando{position:fixed; inset:0; background:var(--bg); z-index:100; display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; font-weight:700;}
+  @media (prefers-reduced-motion: no-preference){
+    section.active{animation:fade .18s ease;}
+    @keyframes fade{from{opacity:.4; transform:translateY(3px);} to{opacity:1; transform:none;}}
+  }
+  @media(max-width:640px){ .card .val{font-size:16.5px;} table{font-size:13px;} }
+</style>
+</head>
+<body>
+<div id="cargando">🏠 Casa La Triada<span class="muted" id="cargandoMsg">Conectando con la nube…</span></div>
+<header>
+  <div class="hdr-top">
+    <h1>CASA LA TRIADA<small>Gestor de obra · La Triada SAS · Colombia</small></h1>
+    <div class="saldo-chip"><div class="lbl">Saldo en caja</div><div class="val" id="hdrSaldo">—</div></div>
+  </div>
+  <nav id="nav">
+    <button data-tab="resumen" class="active">Resumen</button>
+    <button data-tab="caja">Ingresos y Egresos</button>
+    <button data-tab="inventario">Inventario</button>
+    <button data-tab="socios">Socios</button>
+    <button data-tab="presupuesto">Presupuesto</button>
+    <button data-tab="cronograma">Cronograma</button>
+  </nav>
+</header>
+<main>
+
+<section id="resumen" class="active">
+  <div class="cards" id="resCards"></div>
+  <h2>Alertas</h2>
+  <div id="resAlertas"></div>
+  <h2>Proyección de venta</h2>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Unidad</th><th class="num">Precio estimado (COP)</th></tr></thead>
+      <tbody id="ventasBody"></tbody>
+    </table>
+    <p class="muted" style="margin-top:8px">Toca un valor para editarlo. Utilidad proyectada = ventas estimadas − presupuesto total.</p>
+  </div>
+  <h2>Últimos movimientos</h2>
+  <div class="panel"><table>
+    <thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Valor</th></tr></thead>
+    <tbody id="resUltimos"></tbody>
+  </table></div>
+</section>
+
+<section id="caja">
+  <div class="cards" id="cajaCards"></div>
+  <div class="toolbar">
+    <button class="btn" onclick="abrirMov()">＋ Nuevo movimiento</button>
+    <input type="search" id="cajaBuscar" placeholder="Buscar concepto…" oninput="render()">
+    <select id="cajaFiltroTipo" onchange="render()">
+      <option value="">Todos</option><option value="i">Ingresos</option><option value="e">Egresos</option>
+    </select>
+    <select id="cajaFiltroCat" onchange="render()"><option value="">Todas las categorías</option></select>
+  </div>
+  <div class="panel"><table>
+    <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th class="num">Ingreso</th><th class="num">Egreso</th><th class="num">Saldo</th><th></th></tr></thead>
+    <tbody id="cajaBody"></tbody>
+  </table></div>
+</section>
+
+<section id="inventario">
+  <div class="cards" id="invCards"></div>
+  <div class="toolbar">
+    <button class="btn" onclick="abrirMatMov()">＋ Entrada / salida</button>
+    <button class="btn sec" onclick="abrirMaterial()">＋ Nuevo material</button>
+  </div>
+  <h2>Stock actual</h2>
+  <div class="panel"><table>
+    <thead><tr><th>Material</th><th>Unidad</th><th class="num">Entradas</th><th class="num">Salidas</th><th class="num">Stock</th><th class="num">Mínimo</th><th>Estado</th><th></th></tr></thead>
+    <tbody id="invStockBody"></tbody>
+  </table></div>
+  <h2>Movimientos de inventario</h2>
+  <div class="panel"><table>
+    <thead><tr><th>Fecha</th><th>Material</th><th>Tipo</th><th class="num">Cantidad</th><th>Nota / responsable</th><th></th></tr></thead>
+    <tbody id="invMovBody"></tbody>
+  </table></div>
+</section>
+
+<section id="socios">
+  <div class="cards" id="socCards"></div>
+  <div class="toolbar"><button class="btn sec" onclick="abrirSocio()">＋ Nuevo socio</button>
+  <span class="muted">Los aportes se calculan solos desde Ingresos y Egresos (categoría "Aporte Social").</span></div>
+  <div class="panel"><table>
+    <thead><tr><th>Socio</th><th class="num">Compromiso</th><th class="num">Aportado</th><th class="num">Pendiente</th><th class="num">% Part.</th><th>Avance</th><th class="num">Utilidad proy.</th><th></th></tr></thead>
+    <tbody id="socBody"></tbody>
+  </table></div>
+</section>
+
+<section id="presupuesto">
+  <div class="cards" id="preCards"></div>
+  <div class="toolbar"><button class="btn sec" onclick="abrirCapitulo()">＋ Nuevo capítulo</button>
+  <span class="muted">Lo ejecutado se calcula desde los egresos según su categoría.</span></div>
+  <div class="panel"><table>
+    <thead><tr><th>Capítulo</th><th class="num">Presupuesto</th><th class="num">Ejecutado</th><th class="num">Disponible</th><th>Avance</th><th></th></tr></thead>
+    <tbody id="preBody"></tbody>
+  </table></div>
+</section>
+
+<section id="cronograma">
+  <div class="cards" id="croCards"></div>
+  <div class="toolbar"><button class="btn sec" onclick="abrirEtapa()">＋ Nueva etapa</button></div>
+  <div class="panel"><table>
+    <thead><tr><th>Etapa</th><th>Inicio</th><th>Fin estimado</th><th>Responsable</th><th style="min-width:130px">Avance</th><th>Notas</th><th></th></tr></thead>
+    <tbody id="croBody"></tbody>
+  </table></div>
+</section>
+
+</main>
+
+<div class="bottombar">
+  <button class="btn" onclick="exportarExcel()">📥 Excel</button>
+  <button class="btn sec" onclick="refrescar(true)">🔄 Actualizar</button>
+  <span class="sync" id="syncInfo">—</span>
+</div>
+
+<dialog id="dlgConfig"><form method="dialog" onsubmit="guardarConfig(event)">
+  <h3>🔑 Conectar con el proyecto</h3>
+  <div id="cfgCamposSupa">
+    <div class="field"><label>URL del proyecto Supabase</label><input id="cfgUrl" placeholder="https://xxxx.supabase.co"></div>
+    <div class="field"><label>Llave anon (public)</label><input id="cfgKey" placeholder="eyJhbGciOi…"></div>
+  </div>
+  <div class="field"><label>Clave de obra</label><input id="cfgClave" required placeholder="La clave compartida del equipo"></div>
+  <p class="muted" style="margin-bottom:10px">Esto se guarda solo en este dispositivo. Pídele la clave al administrador del proyecto.</p>
+  <div class="dlg-actions"><button class="btn">Conectar</button></div>
+</form></dialog>
+
+<dialog id="dlgMov"><form method="dialog" onsubmit="guardarMov(event)">
+  <h3 id="dlgMovTitle">Nuevo movimiento</h3>
+  <input type="hidden" id="movId">
+  <div class="row2">
+    <div class="field"><label>Fecha</label><input type="date" id="movFecha" required></div>
+    <div class="field"><label>Tipo</label><select id="movTipo" onchange="movTipoCambio()"><option value="i">Ingreso</option><option value="e">Egreso</option></select></div>
+  </div>
+  <div class="field"><label>Concepto</label><textarea id="movConcepto" required></textarea></div>
+  <div class="row2">
+    <div class="field"><label>Categoría</label><select id="movCat"></select></div>
+    <div class="field" id="movSocioWrap"><label>Socio (si es aporte)</label><select id="movSocio"><option value="">—</option></select></div>
+  </div>
+  <div class="field"><label>Valor (COP)</label><input type="number" id="movValor" inputmode="numeric" min="1" step="1" required></div>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgMov.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<dialog id="dlgMaterial"><form method="dialog" onsubmit="guardarMaterial(event)">
+  <h3 id="dlgMatTitle">Nuevo material</h3>
+  <input type="hidden" id="matId">
+  <div class="field"><label>Nombre</label><input id="matNombre" required placeholder="Ej: Cemento gris 50 kg"></div>
+  <div class="row2">
+    <div class="field"><label>Unidad</label><input id="matUnidad" required placeholder="bulto, m³, und…"></div>
+    <div class="field"><label>Stock mínimo (alerta)</label><input type="number" id="matMin" inputmode="decimal" min="0" step="any" value="0"></div>
+  </div>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgMaterial.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<dialog id="dlgMatMov"><form method="dialog" onsubmit="guardarMatMov(event)">
+  <h3>Movimiento de inventario</h3>
+  <input type="hidden" id="mmId">
+  <div class="row2">
+    <div class="field"><label>Fecha</label><input type="date" id="mmFecha" required></div>
+    <div class="field"><label>Tipo</label><select id="mmTipo"><option value="entrada">Entrada (compra)</option><option value="salida">Salida (uso en obra)</option></select></div>
+  </div>
+  <div class="field"><label>Material</label><select id="mmMaterial" required></select></div>
+  <div class="field"><label>Cantidad</label><input type="number" id="mmCantidad" inputmode="decimal" min="0.01" step="any" required></div>
+  <div class="field"><label>Nota / responsable</label><input id="mmNota" placeholder="Ej: compra Homecenter, responsable Willinton"></div>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgMatMov.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<dialog id="dlgSocio"><form method="dialog" onsubmit="guardarSocio(event)">
+  <h3 id="dlgSocioTitle">Socio</h3>
+  <input type="hidden" id="socId">
+  <div class="field"><label>Nombre</label><input id="socNombre" required></div>
+  <div class="field"><label>Compromiso de inversión (COP)</label><input type="number" id="socCompromiso" inputmode="numeric" min="0" step="1" required></div>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgSocio.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<dialog id="dlgCapitulo"><form method="dialog" onsubmit="guardarCapitulo(event)">
+  <h3 id="dlgCapTitle">Capítulo de presupuesto</h3>
+  <input type="hidden" id="capId">
+  <div class="field"><label>Nombre (también es la categoría de egresos)</label><input id="capNombre" required></div>
+  <div class="field"><label>Presupuesto (COP)</label><input type="number" id="capValor" inputmode="numeric" min="0" step="1" required></div>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgCapitulo.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<dialog id="dlgEtapa"><form method="dialog" onsubmit="guardarEtapa(event)">
+  <h3 id="dlgEtapaTitle">Etapa de obra</h3>
+  <input type="hidden" id="etaId">
+  <div class="field"><label>Nombre de la etapa</label><input id="etaNombre" required></div>
+  <div class="row2">
+    <div class="field"><label>Fecha inicio</label><input type="date" id="etaInicio"></div>
+    <div class="field"><label>Fecha fin estimada</label><input type="date" id="etaFin"></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>Responsable</label><input id="etaResp"></div>
+    <div class="field"><label>Avance (%)</label><input type="number" id="etaAvance" inputmode="numeric" min="0" max="100" value="0"></div>
+  </div>
+  <div class="field"><label>Notas</label><textarea id="etaNotas"></textarea></div>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgEtapa.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<script>
+'use strict';
+// ================== CONFIGURACIÓN ==================
+// Cuando el proyecto Supabase esté creado, estos dos valores se pueden
+// dejar fijos aquí para que los socios solo tengan que poner la clave de obra:
+const BAKED_URL = 'https://khtmhzvmtagexowvixxe.supabase.co';
+const BAKED_KEY = 'sb_publishable_Fo35juSqrtsoDQiX0drruA_5j52rKiz';
+
+const CFG_KEY = 'triadaCfg_v1';
+let cfg = null;
+try{ cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'null'); }catch(e){}
+if(cfg){ if(BAKED_URL) cfg.url = BAKED_URL; if(BAKED_KEY) cfg.key = BAKED_KEY; }
+
+const fmt = new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0});
+const $ = id => document.getElementById(id);
+const CATS_INGRESO = ['Aporte Social','Venta Inmueble','Otros Ingresos'];
+
+let state = { movimientos:[], materiales:[], movInventario:[], socios:[], capitulos:[], etapas:[], ventas:[] };
+let ocupado = false;
+
+// ================== CAPA DE DATOS (Supabase REST) ==================
+async function api(method, path, body){
+  const r = await fetch(cfg.url.replace(/\/+$/,'')+'/rest/v1/'+path, {
+    method,
+    headers:{ 'apikey':cfg.key, 'Authorization':'Bearer '+cfg.key, 'Content-Type':'application/json',
+      'X-Clave':cfg.clave, 'Prefer':'return=minimal' },
+    body: body? JSON.stringify(body):undefined
+  });
+  if(!r.ok){ throw new Error(method+' '+path+' → '+r.status+' '+(await r.text()).slice(0,200)); }
+  return method==='GET'? r.json() : null;
+}
+const nullSi = v => v===''||v==null? null : v;
+
+async function cargarTodo(){
+  const [mov, mat, inv, soc, cap, eta, ven] = await Promise.all([
+    api('GET','movimientos?select=*&order=fecha,creado'),
+    api('GET','materiales?select=*&order=orden'),
+    api('GET','mov_inventario?select=*&order=fecha'),
+    api('GET','socios?select=*&order=orden'),
+    api('GET','capitulos?select=*&order=orden'),
+    api('GET','etapas?select=*&order=orden'),
+    api('GET','ventas?select=*&order=orden'),
+  ]);
+  state = {
+    movimientos: mov.map(m=>({...m, valor:+m.valor})),
+    materiales: mat.map(m=>({...m, minimo:+m.minimo})),
+    movInventario: inv.map(x=>({id:x.id, fecha:x.fecha, materialId:x.material_id, tipo:x.tipo, cantidad:+x.cantidad, nota:x.nota||''})),
+    socios: soc.map(s=>({...s, compromiso:+s.compromiso})),
+    capitulos: cap.map(c=>({...c, presupuesto:+c.presupuesto})),
+    etapas: eta.map(e=>({...e, inicio:e.inicio||'', fin:e.fin||'', resp:e.resp||'', avance:+e.avance||0, notas:e.notas||''})),
+    ventas: ven.map(v=>({...v, valor:+v.valor})),
+  };
+}
+
+let ultimaSync = null;
+function pintarSync(err){
+  const el = $('syncInfo');
+  if(err){ el.textContent = '⚠ Sin conexión'; el.className='sync err'; return; }
+  el.className='sync';
+  el.textContent = '✓ Sincronizado ' + (ultimaSync? ultimaSync.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}):'');
+}
+async function refrescar(manual){
+  try{
+    await cargarTodo();
+    ultimaSync = new Date(); pintarSync(false); render();
+    if(!state.socios.length && manual) alert('Conectó pero no hay datos. Verifica que la clave de obra sea correcta y que el script SQL se haya ejecutado.');
+  }catch(e){ pintarSync(true); if(manual) alert('No se pudo conectar: '+e.message); }
+}
+
+// escritura genérica con recarga
+async function escribir(fn){
+  if(ocupado) return false;
+  ocupado = true;
+  try{ await fn(); await cargarTodo(); ultimaSync=new Date(); pintarSync(false); render(); return true; }
+  catch(e){ alert('No se pudo guardar. Revisa tu conexión a internet.\n\nDetalle: '+e.message); pintarSync(true); return false; }
+  finally{ ocupado = false; }
+}
+
+// ================== helpers ==================
+const money = v => fmt.format(v||0);
+const byFecha = (a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || 0;
+const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function catsEgreso(){ return state.capitulos.map(c=>c.nombre); }
+function totIngresos(){ return state.movimientos.filter(m=>m.tipo==='i').reduce((a,m)=>a+m.valor,0); }
+function totEgresos(){ return state.movimientos.filter(m=>m.tipo==='e').reduce((a,m)=>a+m.valor,0); }
+function saldo(){ return totIngresos()-totEgresos(); }
+function stockDe(matId){
+  let s=0; state.movInventario.forEach(m=>{ if(m.materialId===matId) s += m.tipo==='entrada'? +m.cantidad : -m.cantidad; });
+  return s;
+}
+function aportadoDe(nombre){ return state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social'&&m.socio===nombre).reduce((a,m)=>a+m.valor,0); }
+function ejecutadoDe(cat){ return state.movimientos.filter(m=>m.tipo==='e'&&m.categoria===cat).reduce((a,m)=>a+m.valor,0); }
+function fechaCorta(f){ if(!f) return '—'; const [y,m,d]=f.split('-'); return `${d}/${m}/${y.slice(2)}`; }
+
+// ================== render ==================
+function render(){
+  $('hdrSaldo').textContent = money(saldo());
+  renderResumen(); renderCaja(); renderInventario(); renderSocios(); renderPresupuesto(); renderCronograma();
+}
+
+function renderResumen(){
+  const pres = state.capitulos.reduce((a,c)=>a+c.presupuesto,0);
+  const ejec = totEgresos();
+  const ventas = state.ventas.reduce((a,v)=>a+v.valor,0);
+  const util = ventas - pres;
+  const avance = state.etapas.length? Math.round(state.etapas.reduce((a,e)=>a+(+e.avance||0),0)/state.etapas.length) : 0;
+  const aportes = state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social').reduce((a,m)=>a+m.valor,0);
+  $('resCards').innerHTML = `
+    <div class="card good"><div class="lbl">Saldo en caja</div><div class="val">${money(saldo())}</div></div>
+    <div class="card"><div class="lbl">Aportes recibidos</div><div class="val">${money(aportes)}</div><div class="sub">de ${money(state.socios.reduce((a,s)=>a+s.compromiso,0))} comprometidos</div></div>
+    <div class="card"><div class="lbl">Presupuesto ejecutado</div><div class="val">${pres? Math.round(ejec/pres*100):0}%</div><div class="sub">${money(ejec)} de ${money(pres)}</div></div>
+    <div class="card warn"><div class="lbl">Avance de obra</div><div class="val">${avance}%</div><div class="sub">promedio de etapas</div></div>
+    <div class="card ${util>=0?'good':'bad'}"><div class="lbl">Utilidad proyectada</div><div class="val">${money(util)}</div><div class="sub">${pres? (util/pres*100).toFixed(1):0}% sobre inversión</div></div>`;
+
+  let al = '';
+  state.materiales.forEach(m=>{ const s=stockDe(m.id), usado = state.movInventario.some(x=>x.materialId===m.id);
+    if(usado && m.minimo>0 && s<m.minimo) al += `<div class="alert warn">📦 Stock bajo: <b>${esc(m.nombre)}</b> — quedan ${s} ${esc(m.unidad)} (mínimo ${m.minimo})</div>`; });
+  state.capitulos.forEach(c=>{ const e=ejecutadoDe(c.nombre); if(e>c.presupuesto) al += `<div class="alert bad">💸 Capítulo <b>${esc(c.nombre)}</b> sobrepasó el presupuesto por ${money(e-c.presupuesto)}</div>`; });
+  if(saldo() < 5000000) al += `<div class="alert bad">⚠️ Saldo en caja por debajo de ${money(5000000)} — planear próxima ronda de aportes.</div>`;
+  $('resAlertas').innerHTML = al || '<div class="alert good">✅ Sin alertas por ahora.</div>';
+
+  $('ventasBody').innerHTML = state.ventas.map(v=>`
+    <tr><td>${esc(v.nombre)}</td><td class="num"><input type="number" inputmode="numeric" class="venta-input" value="${v.valor}"
+      onchange="cambiarVenta('${v.id}', this.value)"></td></tr>`).join('')
+    + `<tr><td><b>Total venta estimada</b></td><td class="num"><b>${money(ventas)}</b></td></tr>`;
+
+  const ult = [...state.movimientos].sort(byFecha).slice(-8).reverse();
+  $('resUltimos').innerHTML = ult.map(m=>`
+    <tr><td style="white-space:nowrap">${fechaCorta(m.fecha)}</td><td>${esc(m.concepto)}</td>
+    <td class="num ${m.tipo==='i'?'pos':'neg'}">${m.tipo==='i'?'+':'−'}${money(m.valor)}</td></tr>`).join('');
+}
+
+function renderCaja(){
+  const q = ($('cajaBuscar').value||'').toLowerCase();
+  const ft = $('cajaFiltroTipo').value;
+  const cats = [...new Set(state.movimientos.map(m=>m.categoria))].sort();
+  const sel = $('cajaFiltroCat'); const cur = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('');
+  const fc = sel.value;
+
+  $('cajaCards').innerHTML = `
+    <div class="card good"><div class="lbl">Total ingresos</div><div class="val">${money(totIngresos())}</div></div>
+    <div class="card bad"><div class="lbl">Total egresos</div><div class="val">${money(totEgresos())}</div></div>
+    <div class="card"><div class="lbl">Saldo</div><div class="val">${money(saldo())}</div></div>
+    <div class="card"><div class="lbl">Movimientos</div><div class="val">${state.movimientos.length}</div></div>`;
+
+  const orden = [...state.movimientos].sort(byFecha);
+  let s = 0; const conSaldo = orden.map(m=>{ s += m.tipo==='i'? m.valor : -m.valor; return {...m, _saldo:s}; });
+  const rows = conSaldo.filter(m=>
+    (!q || m.concepto.toLowerCase().includes(q)) && (!ft || m.tipo===ft) && (!fc || m.categoria===fc)
+  ).reverse();
+  $('cajaBody').innerHTML = rows.map(m=>`
+    <tr>
+      <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
+      <td>${esc(m.concepto)}${m.socio?`<br><span class="muted">👤 ${esc(m.socio)}</span>`:''}</td>
+      <td><span class="tag ${m.categoria==='Aporte Social'?'aporte':''}">${esc(m.categoria)}</span></td>
+      <td class="num pos">${m.tipo==='i'? money(m.valor):''}</td>
+      <td class="num neg">${m.tipo==='e'? money(m.valor):''}</td>
+      <td class="num">${money(m._saldo)}</td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirMov('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarMov('${m.id}')" aria-label="Eliminar">🗑</button></td>
+    </tr>`).join('') || '<tr><td colspan="7" class="muted">Sin movimientos.</td></tr>';
+}
+
+function renderInventario(){
+  const bajos = state.materiales.filter(m=> m.minimo>0 && stockDe(m.id)<m.minimo && state.movInventario.some(x=>x.materialId===m.id)).length;
+  $('invCards').innerHTML = `
+    <div class="card"><div class="lbl">Materiales registrados</div><div class="val">${state.materiales.length}</div></div>
+    <div class="card"><div class="lbl">Movimientos</div><div class="val">${state.movInventario.length}</div></div>
+    <div class="card ${bajos?'bad':'good'}"><div class="lbl">Con stock bajo</div><div class="val">${bajos}</div></div>`;
+
+  $('invStockBody').innerHTML = state.materiales.map(m=>{
+    const ent = state.movInventario.filter(x=>x.materialId===m.id&&x.tipo==='entrada').reduce((a,x)=>a+ +x.cantidad,0);
+    const sal = state.movInventario.filter(x=>x.materialId===m.id&&x.tipo==='salida').reduce((a,x)=>a+ +x.cantidad,0);
+    const st = ent-sal; const bajo = m.minimo>0 && st<m.minimo && (ent||sal);
+    return `<tr>
+      <td><b>${esc(m.nombre)}</b></td><td>${esc(m.unidad)}</td>
+      <td class="num">${ent}</td><td class="num">${sal}</td>
+      <td class="num ${bajo?'stock-low':''}">${st}</td><td class="num">${m.minimo}</td>
+      <td>${bajo? '<span class="tag rojo">⚠ Pedir</span>' : (st>0?'<span class="tag aporte">OK</span>':'<span class="tag">Sin stock</span>')}</td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirMaterial('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarMaterial('${m.id}')" aria-label="Eliminar">🗑</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" class="muted">Agrega tu primer material.</td></tr>';
+
+  $('invMovBody').innerHTML = [...state.movInventario].sort(byFecha).reverse().map(x=>{
+    const mat = state.materiales.find(m=>m.id===x.materialId);
+    return `<tr>
+      <td style="white-space:nowrap">${fechaCorta(x.fecha)}</td><td>${mat? esc(mat.nombre):'—'}</td>
+      <td>${x.tipo==='entrada'? '<span class="tag aporte">▲ Entrada</span>':'<span class="tag rojo">▼ Salida</span>'}</td>
+      <td class="num">${x.cantidad} ${mat? esc(mat.unidad):''}</td><td>${esc(x.nota||'')}</td>
+      <td><button class="btn ghost" onclick="borrarMatMov('${x.id}')" aria-label="Eliminar">🗑</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="muted">Aún no hay movimientos de inventario. Registra la primera compra de materiales.</td></tr>';
+}
+
+function renderSocios(){
+  const totComp = state.socios.reduce((a,s)=>a+s.compromiso,0);
+  const totApo = state.socios.reduce((a,s)=>a+aportadoDe(s.nombre),0);
+  const ventas = state.ventas.reduce((a,v)=>a+v.valor,0);
+  const util = ventas - state.capitulos.reduce((a,c)=>a+c.presupuesto,0);
+  $('socCards').innerHTML = `
+    <div class="card"><div class="lbl">Inversión comprometida</div><div class="val">${money(totComp)}</div></div>
+    <div class="card good"><div class="lbl">Aportado a la fecha</div><div class="val">${money(totApo)}</div></div>
+    <div class="card ${totComp-totApo>0?'warn':'good'}"><div class="lbl">Pendiente por aportar</div><div class="val">${money(Math.max(totComp-totApo,0))}</div></div>`;
+  $('socBody').innerHTML = state.socios.map(s=>{
+    const ap = aportadoDe(s.nombre); const pct = totComp? s.compromiso/totComp : 0;
+    const pAvance = s.compromiso? Math.min(ap/s.compromiso*100,100) : 0;
+    return `<tr>
+      <td><b>${esc(s.nombre)}</b></td>
+      <td class="num">${money(s.compromiso)}</td>
+      <td class="num pos">${money(ap)}</td>
+      <td class="num ${ap<s.compromiso?'neg':''}">${money(Math.max(s.compromiso-ap,0))}</td>
+      <td class="num">${(pct*100).toFixed(1)}%</td>
+      <td><div class="bar"><i style="width:${pAvance}%" class="${pAvance>=100?'':'warn'}"></i></div><span class="muted">${pAvance.toFixed(0)}%</span></td>
+      <td class="num">${money(util*pct)}</td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirSocio('${s.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarSocio('${s.id}')" aria-label="Eliminar">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPresupuesto(){
+  const tot = state.capitulos.reduce((a,c)=>a+c.presupuesto,0);
+  const ejec = totEgresos();
+  $('preCards').innerHTML = `
+    <div class="card"><div class="lbl">Presupuesto total</div><div class="val">${money(tot)}</div></div>
+    <div class="card bad"><div class="lbl">Ejecutado</div><div class="val">${money(ejec)}</div></div>
+    <div class="card ${tot-ejec>0?'good':'bad'}"><div class="lbl">Disponible</div><div class="val">${money(tot-ejec)}</div></div>`;
+  $('preBody').innerHTML = state.capitulos.map(c=>{
+    const e = ejecutadoDe(c.nombre); const p = c.presupuesto? e/c.presupuesto*100 : (e>0?101:0);
+    const cls = p>100?'over': p>80?'warn':'';
+    return `<tr>
+      <td><b>${esc(c.nombre)}</b></td>
+      <td class="num">${money(c.presupuesto)}</td>
+      <td class="num">${money(e)}</td>
+      <td class="num ${c.presupuesto-e<0?'neg':''}">${money(c.presupuesto-e)}</td>
+      <td><div class="bar"><i class="${cls}" style="width:${Math.min(p,100)}%"></i></div><span class="muted">${p.toFixed(0)}%</span></td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirCapitulo('${c.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarCapitulo('${c.id}')" aria-label="Eliminar">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCronograma(){
+  const avance = state.etapas.length? Math.round(state.etapas.reduce((a,e)=>a+(+e.avance||0),0)/state.etapas.length):0;
+  const activas = state.etapas.filter(e=>e.avance>0 && e.avance<100).length;
+  $('croCards').innerHTML = `
+    <div class="card warn"><div class="lbl">Avance general</div><div class="val">${avance}%</div></div>
+    <div class="card"><div class="lbl">Etapas en curso</div><div class="val">${activas}</div></div>
+    <div class="card good"><div class="lbl">Etapas terminadas</div><div class="val">${state.etapas.filter(e=>+e.avance>=100).length} / ${state.etapas.length}</div></div>`;
+  $('croBody').innerHTML = state.etapas.map(e=>`
+    <tr>
+      <td><b>${esc(e.nombre)}</b></td>
+      <td style="white-space:nowrap">${fechaCorta(e.inicio)}</td><td style="white-space:nowrap">${fechaCorta(e.fin)}</td><td>${esc(e.resp||'—')}</td>
+      <td><div class="bar"><i style="width:${Math.min(e.avance,100)}%" class="${e.avance>=100?'':'warn'}"></i></div><span class="muted">${e.avance}%</span></td>
+      <td class="muted">${esc(e.notas||'')}</td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirEtapa('${e.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarEtapa('${e.id}')" aria-label="Eliminar">🗑</button></td>
+    </tr>`).join('');
+}
+
+// ================== CRUD ==================
+function movTipoCambio(){
+  const t = $('movTipo').value;
+  $('movCat').innerHTML = (t==='i'?CATS_INGRESO:catsEgreso()).map(c=>`<option>${esc(c)}</option>`).join('');
+  $('movSocioWrap').style.display = t==='i' ? '' : 'none';
+}
+function abrirMov(id){
+  const m = id? state.movimientos.find(x=>x.id===id) : null;
+  $('dlgMovTitle').textContent = m? 'Editar movimiento':'Nuevo movimiento';
+  $('movId').value = m? m.id:'';
+  $('movFecha').value = m? m.fecha : new Date().toISOString().slice(0,10);
+  $('movTipo').value = m? m.tipo:'e';
+  movTipoCambio();
+  $('movConcepto').value = m? m.concepto:'';
+  $('movSocio').innerHTML = '<option value="">—</option>'+state.socios.map(s=>`<option ${m&&m.socio===s.nombre?'selected':''}>${esc(s.nombre)}</option>`).join('');
+  if(m) $('movCat').value = m.categoria;
+  $('movValor').value = m? m.valor:'';
+  dlgMov.showModal();
+}
+async function guardarMov(ev){
+  ev.preventDefault();
+  const id = $('movId').value;
+  const o = { fecha:$('movFecha').value, tipo:$('movTipo').value, concepto:$('movConcepto').value.trim(),
+    categoria:$('movCat').value, socio: $('movTipo').value==='i'? $('movSocio').value:'', valor:+$('movValor').value };
+  const ok = await escribir(async ()=>{
+    if(id) await api('PATCH','movimientos?id=eq.'+id, o);
+    else await api('POST','movimientos', o);
+  });
+  if(ok) dlgMov.close();
+}
+function borrarMov(id){ if(confirm('¿Eliminar este movimiento para todos?')) escribir(()=>api('DELETE','movimientos?id=eq.'+id)); }
+
+function abrirMaterial(id){
+  const m = id? state.materiales.find(x=>x.id===id):null;
+  $('dlgMatTitle').textContent = m? 'Editar material':'Nuevo material';
+  $('matId').value = m? m.id:''; $('matNombre').value = m? m.nombre:'';
+  $('matUnidad').value = m? m.unidad:''; $('matMin').value = m? m.minimo:0;
+  dlgMaterial.showModal();
+}
+async function guardarMaterial(ev){
+  ev.preventDefault();
+  const id = $('matId').value;
+  const o = {nombre:$('matNombre').value.trim(), unidad:$('matUnidad').value.trim(), minimo:+$('matMin').value||0};
+  const ok = await escribir(async ()=>{
+    if(id) await api('PATCH','materiales?id=eq.'+id, o);
+    else await api('POST','materiales', o);
+  });
+  if(ok) dlgMaterial.close();
+}
+function borrarMaterial(id){
+  if(confirm('¿Eliminar este material y sus movimientos de inventario para todos?'))
+    escribir(async ()=>{ await api('DELETE','mov_inventario?material_id=eq.'+id); await api('DELETE','materiales?id=eq.'+id); });
+}
+function abrirMatMov(){
+  if(!state.materiales.length){ alert('Primero agrega un material.'); return; }
+  $('mmId').value=''; $('mmFecha').value = new Date().toISOString().slice(0,10);
+  $('mmMaterial').innerHTML = state.materiales.map(m=>`<option value="${m.id}">${esc(m.nombre)} (${esc(m.unidad)})</option>`).join('');
+  $('mmCantidad').value=''; $('mmNota').value='';
+  dlgMatMov.showModal();
+}
+async function guardarMatMov(ev){
+  ev.preventDefault();
+  const o = { fecha:$('mmFecha').value, material_id:$('mmMaterial').value,
+    tipo:$('mmTipo').value, cantidad:+$('mmCantidad').value, nota:$('mmNota').value.trim() };
+  const ok = await escribir(()=>api('POST','mov_inventario', o));
+  if(ok) dlgMatMov.close();
+}
+function borrarMatMov(id){ if(confirm('¿Eliminar este movimiento de inventario para todos?')) escribir(()=>api('DELETE','mov_inventario?id=eq.'+id)); }
+
+function abrirSocio(id){
+  const s = id? state.socios.find(x=>x.id===id):null;
+  $('dlgSocioTitle').textContent = s? 'Editar socio':'Nuevo socio';
+  $('socId').value = s? s.id:''; $('socNombre').value = s? s.nombre:''; $('socCompromiso').value = s? s.compromiso:'';
+  dlgSocio.showModal();
+}
+async function guardarSocio(ev){
+  ev.preventDefault();
+  const id = $('socId').value;
+  const o = {nombre:$('socNombre').value.trim(), compromiso:+$('socCompromiso').value};
+  const ok = await escribir(async ()=>{
+    if(id){
+      const s = state.socios.find(x=>x.id===id);
+      if(s && s.nombre!==o.nombre) await api('PATCH','movimientos?socio=eq.'+encodeURIComponent(s.nombre), {socio:o.nombre});
+      await api('PATCH','socios?id=eq.'+id, o);
+    } else await api('POST','socios', o);
+  });
+  if(ok) dlgSocio.close();
+}
+function borrarSocio(id){ if(confirm('¿Eliminar este socio para todos? (sus aportes quedan en el histórico)')) escribir(()=>api('DELETE','socios?id=eq.'+id)); }
+
+function abrirCapitulo(id){
+  const c = id? state.capitulos.find(x=>x.id===id):null;
+  $('dlgCapTitle').textContent = c? 'Editar capítulo':'Nuevo capítulo';
+  $('capId').value = c? c.id:''; $('capNombre').value = c? c.nombre:''; $('capValor').value = c? c.presupuesto:'';
+  dlgCapitulo.showModal();
+}
+async function guardarCapitulo(ev){
+  ev.preventDefault();
+  const id = $('capId').value;
+  const o = {nombre:$('capNombre').value.trim(), presupuesto:+$('capValor').value};
+  const ok = await escribir(async ()=>{
+    if(id){
+      const c = state.capitulos.find(x=>x.id===id);
+      if(c && c.nombre!==o.nombre) await api('PATCH','movimientos?tipo=eq.e&categoria=eq.'+encodeURIComponent(c.nombre), {categoria:o.nombre});
+      await api('PATCH','capitulos?id=eq.'+id, o);
+    } else await api('POST','capitulos', o);
+  });
+  if(ok) dlgCapitulo.close();
+}
+function borrarCapitulo(id){ if(confirm('¿Eliminar este capítulo del presupuesto para todos?')) escribir(()=>api('DELETE','capitulos?id=eq.'+id)); }
+
+function abrirEtapa(id){
+  const e = id? state.etapas.find(x=>x.id===id):null;
+  $('dlgEtapaTitle').textContent = e? 'Editar etapa':'Nueva etapa';
+  $('etaId').value = e? e.id:''; $('etaNombre').value = e? e.nombre:'';
+  $('etaInicio').value = e? e.inicio:''; $('etaFin').value = e? e.fin:'';
+  $('etaResp').value = e? e.resp:''; $('etaAvance').value = e? e.avance:0; $('etaNotas').value = e? e.notas:'';
+  dlgEtapa.showModal();
+}
+async function guardarEtapa(ev){
+  ev.preventDefault();
+  const id = $('etaId').value;
+  const o = {nombre:$('etaNombre').value.trim(), inicio:nullSi($('etaInicio').value), fin:nullSi($('etaFin').value),
+    resp:$('etaResp').value.trim(), avance:Math.min(Math.max(+$('etaAvance').value||0,0),100), notas:$('etaNotas').value.trim()};
+  const ok = await escribir(async ()=>{
+    if(id) await api('PATCH','etapas?id=eq.'+id, o);
+    else await api('POST','etapas', o);
+  });
+  if(ok) dlgEtapa.close();
+}
+function borrarEtapa(id){ if(confirm('¿Eliminar esta etapa para todos?')) escribir(()=>api('DELETE','etapas?id=eq.'+id)); }
+
+function cambiarVenta(id, valor){ escribir(()=>api('PATCH','ventas?id=eq.'+id, {valor:+valor||0})); }
+
+// ================== XLSX (sin librerías: ZIP sin compresión + SpreadsheetML) ==================
+const crcTable = (()=>{ const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = (c&1)? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c = crcTable[(c ^ u8[i]) & 0xFF] ^ (c>>>8); return (c ^ 0xFFFFFFFF)>>>0; }
+const te = new TextEncoder();
+function zipCrear(archivos){
+  const parts=[]; const central=[]; let offset=0;
+  const u16=v=>[v&255,(v>>8)&255]; const u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
+  archivos.forEach(f=>{
+    const nom = te.encode(f.name); const crc = crc32(f.data);
+    const local = new Uint8Array([ ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(f.data.length), ...u32(f.data.length), ...u16(nom.length), ...u16(0) ]);
+    parts.push(local, nom, f.data);
+    central.push(new Uint8Array([ ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(f.data.length), ...u32(f.data.length), ...u16(nom.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(0), ...u32(offset) ]), nom);
+    offset += local.length + nom.length + f.data.length;
+  });
+  const cdSize = central.reduce((a,p)=>a+p.length,0);
+  const eocd = new Uint8Array([ ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(archivos.length), ...u16(archivos.length),
+    ...u32(cdSize), ...u32(offset), ...u16(0) ]);
+  const total = offset + cdSize + eocd.length;
+  const out = new Uint8Array(total); let p=0;
+  [...parts, ...central, eocd].forEach(a=>{ out.set(a,p); p+=a.length; });
+  return out;
+}
+const xesc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function colRef(n){ let s=''; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+function hojaXml(filas){
+  const rows = filas.map((fila,ri)=>{
+    const cells = fila.map((v,ci)=>{
+      const r = colRef(ci)+(ri+1);
+      if(typeof v === 'number' && isFinite(v)) return `<c r="${r}"><v>${v}</v></c>`;
+      if(v===''||v==null) return '';
+      return `<c r="${r}" t="inlineStr"><is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
+    }).join('');
+    return `<row r="${ri+1}">${cells}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`;
+}
+function exportarExcel(){
+  const orden = [...state.movimientos].sort(byFecha);
+  let s=0;
+  const hMov = [['Item','Fecha','Concepto','Categoría','Socio','Ingreso','Egreso','Saldo'],
+    ...orden.map((m,i)=>{ s += m.tipo==='i'?m.valor:-m.valor;
+      return [i+1, m.fecha, m.concepto, m.categoria, m.socio||'', m.tipo==='i'?m.valor:'', m.tipo==='e'?m.valor:'', s]; })];
+  const hStock = [['Material','Unidad','Entradas','Salidas','Stock','Mínimo'],
+    ...state.materiales.map(m=>{
+      const ent = state.movInventario.filter(x=>x.materialId===m.id&&x.tipo==='entrada').reduce((a,x)=>a+ +x.cantidad,0);
+      const sal = state.movInventario.filter(x=>x.materialId===m.id&&x.tipo==='salida').reduce((a,x)=>a+ +x.cantidad,0);
+      return [m.nombre, m.unidad, ent, sal, ent-sal, m.minimo]; })];
+  const hInvMov = [['Fecha','Material','Tipo','Cantidad','Nota'],
+    ...[...state.movInventario].sort(byFecha).map(x=>{
+      const mat = state.materiales.find(m=>m.id===x.materialId);
+      return [x.fecha, mat?mat.nombre:'', x.tipo, +x.cantidad, x.nota||'']; })];
+  const totComp = state.socios.reduce((a,x)=>a+x.compromiso,0);
+  const util = state.ventas.reduce((a,v)=>a+v.valor,0) - state.capitulos.reduce((a,c)=>a+c.presupuesto,0);
+  const hSoc = [['Socio','Compromiso','Aportado','Pendiente','% Participación','Utilidad proyectada'],
+    ...state.socios.map(x=>{ const ap=aportadoDe(x.nombre); const pct= totComp? x.compromiso/totComp:0;
+      return [x.nombre, x.compromiso, ap, Math.max(x.compromiso-ap,0), +(pct*100).toFixed(2), Math.round(util*pct)]; })];
+  const hPre = [['Capítulo','Presupuesto','Ejecutado','Disponible','% Ejecutado'],
+    ...state.capitulos.map(c=>{ const e=ejecutadoDe(c.nombre);
+      return [c.nombre, c.presupuesto, e, c.presupuesto-e, c.presupuesto? +((e/c.presupuesto)*100).toFixed(1) : '']; })];
+  const hCro = [['Etapa','Inicio','Fin estimado','Responsable','% Avance','Notas'],
+    ...state.etapas.map(e=>[e.nombre, e.inicio||'', e.fin||'', e.resp||'', +e.avance||0, e.notas||''])];
+  const hRes = [['CASA LA TRIADA — Resumen', ''],
+    ['Fecha de exportación', new Date().toISOString().slice(0,10)],
+    ['Saldo en caja', saldo()],
+    ['Total ingresos', totIngresos()],
+    ['Total egresos', totEgresos()],
+    ['Presupuesto total', state.capitulos.reduce((a,c)=>a+c.presupuesto,0)],
+    ['Venta estimada', state.ventas.reduce((a,v)=>a+v.valor,0)],
+    ['Utilidad proyectada', util]];
+
+  const hojas = [ ['Resumen',hRes], ['Ingresos y Egresos',hMov], ['Inventario Stock',hStock],
+    ['Inventario Movimientos',hInvMov], ['Socios',hSoc], ['Presupuesto',hPre], ['Cronograma',hCro] ];
+
+  const sheetsXml = hojas.map((h,i)=>`<sheet name="${xesc(h[0])}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('');
+  const relsXml = hojas.map((h,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('');
+  const typesXml = hojas.map((h,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+
+  const archivos = [
+    {name:'[Content_Types].xml', data:te.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${typesXml}</Types>`)},
+    {name:'_rels/.rels', data:te.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`)},
+    {name:'xl/workbook.xml', data:te.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetsXml}</sheets></workbook>`)},
+    {name:'xl/_rels/workbook.xml.rels', data:te.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relsXml}</Relationships>`)},
+    ...hojas.map((h,i)=>({name:`xl/worksheets/sheet${i+1}.xml`, data:te.encode(hojaXml(h[1]))})),
+  ];
+  const zip = zipCrear(archivos);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([zip],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download = 'Casa-La-Triada-'+new Date().toISOString().slice(0,10)+'.xlsx';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ================== configuración / arranque ==================
+function guardarConfig(ev){
+  ev.preventDefault();
+  const nueva = {
+    url: BAKED_URL || $('cfgUrl').value.trim(),
+    key: BAKED_KEY || $('cfgKey').value.trim(),
+    clave: $('cfgClave').value.trim()
+  };
+  if(!nueva.url || !nueva.key){ alert('Falta la URL o la llave del proyecto.'); return; }
+  localStorage.setItem(CFG_KEY, JSON.stringify(nueva));
+  location.reload();
+}
+
+$('nav').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active', x===b));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active', s.id===b.dataset.tab));
+  window.scrollTo({top:0});
+});
+
+async function iniciar(){
+  if(!cfg || !cfg.url || !cfg.key || !cfg.clave){
+    $('cargando').style.display='none';
+    if(BAKED_URL && BAKED_KEY) $('cfgCamposSupa').style.display='none';
+    dlgConfig.showModal();
+    return;
+  }
+  $('cargandoMsg').textContent = 'Conectando con la nube…';
+  try{
+    await cargarTodo();
+    ultimaSync = new Date(); pintarSync(false);
+    $('cargando').style.display='none';
+    render();
+    if(!state.socios.length){
+      alert('Conectó, pero no hay datos. Verifica la clave de obra o que el script SQL se haya ejecutado en Supabase.');
+      localStorage.removeItem(CFG_KEY);
+      if(BAKED_URL && BAKED_KEY) $('cfgCamposSupa').style.display='none';
+      dlgConfig.showModal();
+    }
+  }catch(e){
+    $('cargando').style.display='none';
+    pintarSync(true); render();
+    alert('No se pudo conectar: '+e.message+'\n\nRevisa la URL, la llave y tu conexión a internet.');
+    dlgConfig.showModal();
+    if(cfg){ $('cfgUrl').value=cfg.url||''; $('cfgKey').value=cfg.key||''; $('cfgClave').value=cfg.clave||''; }
+  }
+}
+
+// sincronización automática cada 20 segundos y al volver a la app
+setInterval(()=>{ if(cfg && cfg.url && !document.querySelector('dialog[open]') && !ocupado) refrescar(false); }, 20000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && cfg && cfg.url && !document.querySelector('dialog[open]')) refrescar(false); });
+
+iniciar();
+</script>
+</body>
+</html>
