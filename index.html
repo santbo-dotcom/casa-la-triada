@@ -549,12 +549,13 @@ function renderInventario(){
     const ent = state.movInventario.filter(x=>x.materialId===m.id&&x.tipo==='entrada').reduce((a,x)=>a+ +x.cantidad,0);
     const sal = state.movInventario.filter(x=>x.materialId===m.id&&x.tipo==='salida').reduce((a,x)=>a+ +x.cantidad,0);
     const st = ent-sal; const bajo = m.minimo>0 && st<m.minimo && (ent||sal);
-    return `<tr>
-      <td><b>${esc(m.nombre)}</b></td><td>${esc(m.unidad)}</td>
+    const n = state.movInventario.filter(x=>x.materialId===m.id).length;
+    return `<tr class="clic" onclick="verDetalleMaterial('${m.id}')" title="Toca para ver entradas y salidas">
+      <td><b>${esc(m.nombre)}</b><br><span class="muted">${n} movimiento${n===1?'':'s'}</span></td><td>${esc(m.unidad)}</td>
       <td class="num">${ent}</td><td class="num">${sal}</td>
       <td class="num ${bajo?'stock-low':''}">${st}</td><td class="num">${m.minimo}</td>
       <td>${bajo? '<span class="tag rojo">⚠ Pedir</span>' : (st>0?'<span class="tag aporte">OK</span>':'<span class="tag">Sin stock</span>')}</td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirMaterial('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarMaterial('${m.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="event.stopPropagation();abrirMaterial('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarMaterial('${m.id}')" aria-label="Eliminar">🗑</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" class="muted">Agrega tu primer material.</td></tr>';
 
@@ -583,7 +584,7 @@ function renderSocios(){
       const puso = aportadoDesde(s.nombre, lla.fecha);
       const falta = Math.max(obj-puso, 0);
       const listo = puso>=obj && obj>0;
-      return `<tr>
+      return `<tr class="clic" onclick="verDetalleSocio('${s.id}')" title="Toca para ver sus aportes">
         <td><b>${esc(s.nombre)}</b></td>
         <td class="num">${money(obj)}</td>
         <td class="num pos">${money(Math.min(puso,obj))}</td>
@@ -609,15 +610,16 @@ function renderSocios(){
   $('socBody').innerHTML = state.socios.map(s=>{
     const ap = aportadoDe(s.nombre); const pct = totComp? s.compromiso/totComp : 0;
     const pAvance = s.compromiso? Math.min(ap/s.compromiso*100,100) : 0;
-    return `<tr>
-      <td><b>${esc(s.nombre)}</b></td>
+    const n = state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social'&&m.socio===s.nombre).length;
+    return `<tr class="clic" onclick="verDetalleSocio('${s.id}')" title="Toca para ver sus aportes">
+      <td><b>${esc(s.nombre)}</b><br><span class="muted">${n} aporte${n===1?'':'s'}</span></td>
       <td class="num">${money(s.compromiso)}</td>
       <td class="num pos">${money(ap)}</td>
       <td class="num ${ap<s.compromiso?'neg':''}">${money(Math.max(s.compromiso-ap,0))}</td>
       <td class="num">${(pct*100).toFixed(1)}%</td>
       <td><div class="bar"><i style="width:${pAvance}%" class="${pAvance>=100?'':'warn'}"></i></div><span class="muted">${pAvance.toFixed(0)}%</span></td>
       <td class="num">${money(util*pct)}</td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirSocio('${s.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarSocio('${s.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="event.stopPropagation();abrirSocio('${s.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarSocio('${s.id}')" aria-label="Eliminar">🗑</button></td>
     </tr>`;
   }).join('');
 }
@@ -815,6 +817,57 @@ function verDetalleCap(id){
       <td class="num neg">${money(m.valor)}</td></tr>`).join('')}
       <tr><td colspan="2"><b>Total (${items.length} gasto${items.length===1?'':'s'})</b></td><td class="num"><b>${money(total)}</b></td></tr>
     </tbody></table>` : '<p class="muted" style="padding:12px 0">Sin gastos registrados en este capítulo todavía.</p>';
+  dlgDetalle.showModal();
+}
+
+// ----- Detalle de un socio: todos sus aportes -----
+function verDetalleSocio(id){
+  const s = state.socios.find(x=>x.id===id); if(!s) return;
+  const items = state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social'&&m.socio===s.nombre).sort(byFecha);
+  const total = items.reduce((a,m)=>a+m.valor,0);
+  const pend = Math.max(s.compromiso-total,0);
+  $('detTitle').textContent = '👤 '+s.nombre;
+  $('detResumen').innerHTML = `<div class="detcards">
+    <div><div class="l">Compromiso</div><div class="v">${money(s.compromiso)}</div></div>
+    <div><div class="l">Aportado</div><div class="v" style="color:var(--good)">${money(total)}</div></div>
+    <div><div class="l">Pendiente</div><div class="v" style="color:${pend>0?'var(--bad)':'var(--good)'}">${money(pend)}</div></div>
+  </div>`;
+  let acum=0;
+  $('detBody').innerHTML = items.length ? `<table>
+    <thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Valor</th><th class="num">Acumulado</th></tr></thead>
+    <tbody>${items.map(m=>{ acum+=m.valor; return `<tr>
+      <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
+      <td>${esc(m.concepto)}</td>
+      <td class="num pos">${money(m.valor)}</td>
+      <td class="num muted">${money(acum)}</td></tr>`;}).join('')}
+      <tr><td colspan="2"><b>Total (${items.length} aporte${items.length===1?'':'s'})</b></td><td class="num"><b>${money(total)}</b></td><td></td></tr>
+    </tbody></table>` : '<p class="muted" style="padding:12px 0">Este socio aún no tiene aportes registrados.</p>';
+  dlgDetalle.showModal();
+}
+
+// ----- Detalle de un material: entradas y salidas -----
+function verDetalleMaterial(id){
+  const mat = state.materiales.find(x=>x.id===id); if(!mat) return;
+  const items = state.movInventario.filter(x=>x.materialId===id).sort(byFecha);
+  const ent = items.filter(x=>x.tipo==='entrada').reduce((a,x)=>a+ +x.cantidad,0);
+  const sal = items.filter(x=>x.tipo==='salida').reduce((a,x)=>a+ +x.cantidad,0);
+  const st = ent-sal;
+  $('detTitle').textContent = '📦 '+mat.nombre;
+  $('detResumen').innerHTML = `<div class="detcards">
+    <div><div class="l">Entradas</div><div class="v" style="color:var(--good)">${ent} ${esc(mat.unidad)}</div></div>
+    <div><div class="l">Salidas</div><div class="v" style="color:var(--bad)">${sal} ${esc(mat.unidad)}</div></div>
+    <div><div class="l">Stock actual</div><div class="v" style="color:${mat.minimo>0&&st<mat.minimo&&items.length?'var(--bad)':'var(--ink)'}">${st} ${esc(mat.unidad)}</div></div>
+  </div>`;
+  let acum=0;
+  $('detBody').innerHTML = items.length ? `<table>
+    <thead><tr><th>Fecha</th><th>Tipo</th><th class="num">Cantidad</th><th class="num">Stock</th><th>Nota</th></tr></thead>
+    <tbody>${items.map(x=>{ acum += x.tipo==='entrada'? +x.cantidad : -x.cantidad; return `<tr>
+      <td style="white-space:nowrap">${fechaCorta(x.fecha)}</td>
+      <td>${x.tipo==='entrada'? '<span class="tag aporte">▲ Entrada</span>':'<span class="tag rojo">▼ Salida</span>'}</td>
+      <td class="num ${x.tipo==='entrada'?'pos':'neg'}">${x.tipo==='entrada'?'+':'−'}${x.cantidad}</td>
+      <td class="num muted">${acum}</td>
+      <td class="muted">${esc(x.nota||'')}</td></tr>`;}).join('')}
+    </tbody></table>` : '<p class="muted" style="padding:12px 0">Este material aún no tiene entradas ni salidas registradas.</p>';
   dlgDetalle.showModal();
 }
 
