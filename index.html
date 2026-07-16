@@ -240,6 +240,7 @@
 <div class="bottombar">
   <button class="btn" onclick="exportarExcel()">📥 Excel</button>
   <button class="btn sec" onclick="refrescar(true)">🔄 Actualizar</button>
+  <button class="btn sec" onclick="cambiarClave()">🔑 Cambiar clave</button>
   <span class="rolchip" id="rolBadge"></span>
   <span class="sync" id="syncInfo">—</span>
 </div>
@@ -357,8 +358,11 @@ const BAKED_URL = 'https://khtmhzvmtagexowvixxe.supabase.co';
 const BAKED_KEY = 'sb_publishable_Fo35juSqrtsoDQiX0drruA_5j52rKiz';
 
 const CFG_KEY = 'triadaCfg_v1';
+// Subir este número cierra la sesión de TODOS y obliga a escribir la clave de nuevo.
+const SESION_V = 2;
 let cfg = null;
 try{ cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'null'); }catch(e){}
+if(cfg && cfg.v !== SESION_V){ cfg = null; localStorage.removeItem(CFG_KEY); }
 if(cfg){ if(BAKED_URL) cfg.url = BAKED_URL; if(BAKED_KEY) cfg.key = BAKED_KEY; }
 
 const fmt = new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0});
@@ -1021,12 +1025,19 @@ function exportarExcel(){
 }
 
 // ================== configuración / arranque ==================
+function cambiarClave(){
+  if(confirm('¿Salir y entrar con otra clave?\n\nSe cerrará la sesión en este dispositivo y tendrás que escribir la clave de nuevo.')){
+    localStorage.removeItem(CFG_KEY);
+    location.reload();
+  }
+}
 function guardarConfig(ev){
   ev.preventDefault();
   const nueva = {
     url: BAKED_URL || $('cfgUrl').value.trim(),
     key: BAKED_KEY || $('cfgKey').value.trim(),
-    clave: $('cfgClave').value.trim()
+    clave: $('cfgClave').value.trim(),
+    v: SESION_V
   };
   if(!nueva.url || !nueva.key){ alert('Falta la URL o la llave del proyecto.'); return; }
   localStorage.setItem(CFG_KEY, JSON.stringify(nueva));
