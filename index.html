@@ -510,7 +510,13 @@ function renderResumen(){
   let al = '';
   state.materiales.forEach(m=>{ const s=stockDe(m.id), usado = state.movInventario.some(x=>x.materialId===m.id);
     if(usado && m.minimo>0 && s<m.minimo) al += `<div class="alert warn">📦 Stock bajo: <b>${esc(m.nombre)}</b> — quedan ${s} ${esc(m.unidad)} (mínimo ${m.minimo})</div>`; });
-  state.capitulos.forEach(c=>{ const e=ejecutadoDe(c.nombre); if(e>c.presupuesto) al += `<div class="alert bad">💸 Capítulo <b>${esc(c.nombre)}</b> sobrepasó el presupuesto por ${money(e-c.presupuesto)}</div>`; });
+  state.capitulos.forEach(c=>{ const e=ejecutadoDe(c.nombre);
+    if(e>c.presupuesto){
+      const exceso = e-c.presupuesto;
+      const pct = c.presupuesto>0 ? (exceso/c.presupuesto*100) : null;
+      al += `<div class="alert bad">💸 Capítulo <b>${esc(c.nombre)}</b> sobrepasó el presupuesto por ${money(exceso)}${pct!==null? ` (<b>+${pct.toFixed(1)}%</b>)` : ''}</div>`;
+    }
+  });
   if(saldo() < 5000000) al += `<div class="alert bad">⚠️ Saldo en caja por debajo de ${money(5000000)} — planear próxima ronda de aportes.</div>`;
   $('resAlertas').innerHTML = al || '<div class="alert good">✅ Sin alertas por ahora.</div>';
 
