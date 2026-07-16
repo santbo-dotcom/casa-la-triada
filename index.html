@@ -89,6 +89,15 @@
   .llamado-bar i{display:block; height:100%; background:#fff; border-radius:6px;}
   .socpanel{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:14px; box-shadow:var(--shadow); border-left:4px solid var(--brand);}
   .socpanel h3{font-size:14.5px; margin-bottom:2px;} .socpanel .muted{margin-bottom:8px;}
+  tr.clic{cursor:pointer;} tr.clic:hover{background:var(--bg);}
+  tr.clic td:first-child b::after{content:" ›"; color:var(--brand); font-weight:800;}
+  #dlgDetalle{max-width:620px;}
+  #detBody{max-height:46vh; overflow:auto; border:1px solid var(--line); border-radius:12px; padding:0 10px;}
+  #detBody table{min-width:0;}
+  .detcards{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px;}
+  .detcards div{background:var(--bg); border-radius:10px; padding:8px 10px; text-align:center;}
+  .detcards .l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;}
+  .detcards .v{font-size:14px; font-weight:800; font-variant-numeric:tabular-nums;}
   dialog{border:none; border-radius:18px; padding:0; max-width:430px; width:calc(100vw - 28px);
     background:var(--card); color:var(--ink); box-shadow:0 24px 70px rgba(0,0,0,.35); margin:auto;}
   dialog::backdrop{background:rgba(10,12,14,.55);}
@@ -295,6 +304,13 @@
   <div class="field"><label>Nombre (también es la categoría de egresos)</label><input id="capNombre" required></div>
   <div class="field"><label>Presupuesto (COP)</label><input type="text" id="capValor" inputmode="numeric" oninput="fmtMiles(this)" required></div>
   <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgCapitulo.close()">Cancelar</button><button class="btn">Guardar</button></div>
+</form></dialog>
+
+<dialog id="dlgDetalle"><form method="dialog">
+  <h3 id="detTitle">Detalle</h3>
+  <div id="detResumen"></div>
+  <div id="detBody"></div>
+  <div class="dlg-actions"><button class="btn">Cerrar</button></div>
 </form></dialog>
 
 <dialog id="dlgLlamado"><form method="dialog" onsubmit="guardarLlamado(event)">
@@ -616,13 +632,14 @@ function renderPresupuesto(){
   $('preBody').innerHTML = state.capitulos.map(c=>{
     const e = ejecutadoDe(c.nombre); const p = c.presupuesto? e/c.presupuesto*100 : (e>0?101:0);
     const cls = p>100?'over': p>80?'warn':'';
-    return `<tr>
-      <td><b>${esc(c.nombre)}</b></td>
+    const n = state.movimientos.filter(m=>m.tipo==='e'&&m.categoria===c.nombre).length;
+    return `<tr class="clic" onclick="verDetalleCap('${c.id}')" title="Toca para ver el detalle">
+      <td><b>${esc(c.nombre)}</b><br><span class="muted">${n} gasto${n===1?'':'s'}</span></td>
       <td class="num">${money(c.presupuesto)}</td>
       <td class="num">${money(e)}</td>
       <td class="num ${c.presupuesto-e<0?'neg':''}">${money(c.presupuesto-e)}</td>
       <td><div class="bar"><i class="${cls}" style="width:${Math.min(p,100)}%"></i></div><span class="muted">${p.toFixed(0)}%</span></td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirCapitulo('${c.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarCapitulo('${c.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap"><button class="btn ghost" onclick="event.stopPropagation();abrirCapitulo('${c.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarCapitulo('${c.id}')" aria-label="Eliminar">🗑</button></td>
     </tr>`;
   }).join('');
 }
@@ -777,6 +794,29 @@ async function guardarEtapa(ev){
 function borrarEtapa(id){ if(confirm('¿Eliminar esta etapa para todos?')) escribir(()=>api('DELETE','etapas?id=eq.'+id)); }
 
 function cambiarVenta(id, valor){ escribir(()=>api('PATCH','ventas?id=eq.'+id, {valor:desagrupar(valor)})); }
+
+// ----- Detalle de un capítulo del presupuesto -----
+function verDetalleCap(id){
+  const c = state.capitulos.find(x=>x.id===id); if(!c) return;
+  const items = state.movimientos.filter(m=>m.tipo==='e'&&m.categoria===c.nombre).sort(byFecha);
+  const total = items.reduce((a,m)=>a+m.valor,0);
+  const disp = c.presupuesto-total;
+  $('detTitle').textContent = '📋 '+c.nombre;
+  $('detResumen').innerHTML = `<div class="detcards">
+    <div><div class="l">Presupuesto</div><div class="v">${money(c.presupuesto)}</div></div>
+    <div><div class="l">Ejecutado</div><div class="v" style="color:var(--bad)">${money(total)}</div></div>
+    <div><div class="l">Disponible</div><div class="v" style="color:${disp<0?'var(--bad)':'var(--good)'}">${money(disp)}</div></div>
+  </div>`;
+  $('detBody').innerHTML = items.length ? `<table>
+    <thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Valor</th></tr></thead>
+    <tbody>${items.map(m=>`<tr>
+      <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
+      <td>${esc(m.concepto)}</td>
+      <td class="num neg">${money(m.valor)}</td></tr>`).join('')}
+      <tr><td colspan="2"><b>Total (${items.length} gasto${items.length===1?'':'s'})</b></td><td class="num"><b>${money(total)}</b></td></tr>
+    </tbody></table>` : '<p class="muted" style="padding:12px 0">Sin gastos registrados en este capítulo todavía.</p>';
+  dlgDetalle.showModal();
+}
 
 // ----- Llamados de aportes -----
 function llaModoCambio(){
