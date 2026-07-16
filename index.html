@@ -115,6 +115,10 @@
   .bottombar{position:fixed; left:0; right:0; bottom:0; z-index:30; background:var(--card); border-top:1px solid var(--line);
     padding:8px 12px calc(8px + env(safe-area-inset-bottom)); display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap;}
   .sync{font-size:11.5px; color:var(--muted); white-space:nowrap;}
+  .rolchip{font-size:11px; font-weight:800; padding:3px 9px; border-radius:20px; white-space:nowrap;
+    background:var(--info-soft); color:var(--info);}
+  .rolchip.admin{background:var(--brand-soft); color:var(--brand);}
+  .rolchip.lectura{background:var(--bg); color:var(--muted);}
   .sync.err{color:var(--bad); font-weight:700;}
   .venta-input{width:150px; text-align:right; border:1px solid var(--line); border-radius:9px; padding:7px 9px;
     background:var(--field); color:var(--ink); font-size:14px; font-variant-numeric:tabular-nums; font-family:inherit;}
@@ -167,7 +171,7 @@
 <section id="caja">
   <div class="cards" id="cajaCards"></div>
   <div class="toolbar">
-    <button class="btn" onclick="abrirMov()">＋ Nuevo movimiento</button>
+    <button class="btn solo-admin" onclick="abrirMov()">＋ Nuevo movimiento</button>
     <input type="search" id="cajaBuscar" placeholder="Buscar concepto…" oninput="render()">
     <select id="cajaFiltroTipo" onchange="render()">
       <option value="">Todos</option><option value="i">Ingresos</option><option value="e">Egresos</option>
@@ -183,8 +187,8 @@
 <section id="inventario">
   <div class="cards" id="invCards"></div>
   <div class="toolbar">
-    <button class="btn" onclick="abrirMatMov()">＋ Entrada / salida</button>
-    <button class="btn sec" onclick="abrirMaterial()">＋ Nuevo material</button>
+    <button class="btn solo-inv" onclick="abrirMatMov()">＋ Entrada / salida</button>
+    <button class="btn sec solo-inv" onclick="abrirMaterial()">＋ Nuevo material</button>
   </div>
   <h2>Stock actual</h2>
   <div class="panel"><table>
@@ -202,8 +206,8 @@
   <div id="llamadoPanel"></div>
   <div class="cards" id="socCards"></div>
   <div class="toolbar">
-    <button class="btn" onclick="abrirLlamado()">🔔 Solicitar nuevo aporte</button>
-    <button class="btn sec" onclick="abrirSocio()">＋ Nuevo socio</button>
+    <button class="btn solo-admin" onclick="abrirLlamado()">🔔 Solicitar nuevo aporte</button>
+    <button class="btn sec solo-admin" onclick="abrirSocio()">＋ Nuevo socio</button>
   </div>
   <span class="muted">Los aportes se calculan solos desde Ingresos y Egresos (categoría "Aporte Social").</span>
   <div class="panel"><table>
@@ -214,7 +218,7 @@
 
 <section id="presupuesto">
   <div class="cards" id="preCards"></div>
-  <div class="toolbar"><button class="btn sec" onclick="abrirCapitulo()">＋ Nuevo capítulo</button>
+  <div class="toolbar"><button class="btn sec solo-admin" onclick="abrirCapitulo()">＋ Nuevo capítulo</button>
   <span class="muted">Lo ejecutado se calcula desde los egresos según su categoría.</span></div>
   <div class="panel"><table>
     <thead><tr><th>Capítulo</th><th class="num">Presupuesto</th><th class="num">Ejecutado</th><th class="num">Disponible</th><th>Avance</th><th></th></tr></thead>
@@ -224,7 +228,7 @@
 
 <section id="cronograma">
   <div class="cards" id="croCards"></div>
-  <div class="toolbar"><button class="btn sec" onclick="abrirEtapa()">＋ Nueva etapa</button></div>
+  <div class="toolbar"><button class="btn sec solo-admin" onclick="abrirEtapa()">＋ Nueva etapa</button></div>
   <div class="panel"><table>
     <thead><tr><th>Etapa</th><th>Inicio</th><th>Fin estimado</th><th>Responsable</th><th style="min-width:130px">Avance</th><th>Notas</th><th></th></tr></thead>
     <tbody id="croBody"></tbody>
@@ -236,6 +240,7 @@
 <div class="bottombar">
   <button class="btn" onclick="exportarExcel()">📥 Excel</button>
   <button class="btn sec" onclick="refrescar(true)">🔄 Actualizar</button>
+  <span class="rolchip" id="rolBadge"></span>
   <span class="sync" id="syncInfo">—</span>
 </div>
 
@@ -362,6 +367,10 @@ const CATS_INGRESO = ['Aporte Social','Venta Inmueble','Otros Ingresos'];
 
 let state = { movimientos:[], materiales:[], movInventario:[], socios:[], capitulos:[], etapas:[], ventas:[], llamados:[] };
 let ocupado = false;
+let miRol = 'ninguno';
+const esAdmin = () => miRol==='admin';
+const puedeInv = () => miRol==='admin' || miRol==='inventario';
+const NOMBRE_ROL = {admin:'Administrador', inventario:'Inventario', lectura:'Solo lectura', ninguno:'Sin acceso'};
 
 // ================== CAPA DE DATOS (Supabase REST) ==================
 async function api(method, path, body){
@@ -376,7 +385,19 @@ async function api(method, path, body){
 }
 const nullSi = v => v===''||v==null? null : v;
 
+async function obtenerRol(){
+  try{
+    const r = await fetch(cfg.url.replace(/\/+$/,'')+'/rest/v1/rpc/triada_rol', {
+      method:'POST',
+      headers:{ 'apikey':cfg.key, 'Authorization':'Bearer '+cfg.key, 'Content-Type':'application/json', 'X-Clave':cfg.clave },
+      body:'{}' });
+    if(!r.ok) return 'ninguno';
+    return (await r.json()) || 'ninguno';
+  }catch(e){ return 'ninguno'; }
+}
+
 async function cargarTodo(){
+  miRol = await obtenerRol();
   const [mov, mat, inv, soc, cap, eta, ven, lla] = await Promise.all([
     api('GET','movimientos?select=*&order=fecha,creado'),
     api('GET','materiales?select=*&order=orden'),
@@ -454,9 +475,18 @@ function ejecutadoDe(cat){ return state.movimientos.filter(m=>m.tipo==='e'&&m.ca
 function fechaCorta(f){ if(!f) return '—'; const [y,m,d]=f.split('-'); return `${d}/${m}/${y.slice(2)}`; }
 
 // ================== render ==================
+function aplicarPermisos(){
+  document.querySelectorAll('.solo-admin').forEach(el=> el.style.display = esAdmin()? '' : 'none');
+  document.querySelectorAll('.solo-inv').forEach(el=> el.style.display = puedeInv()? '' : 'none');
+  const b = $('rolBadge');
+  b.textContent = NOMBRE_ROL[miRol] || 'Sin acceso';
+  b.className = 'rolchip' + (miRol==='admin'?' admin' : miRol==='lectura'?' lectura':'');
+}
+
 function render(){
   $('hdrSaldo').textContent = money(saldo());
   renderResumen(); renderCaja(); renderInventario(); renderSocios(); renderPresupuesto(); renderCronograma();
+  aplicarPermisos();
 }
 
 function renderResumen(){
@@ -498,7 +528,7 @@ function renderResumen(){
 
   $('ventasBody').innerHTML = state.ventas.map(v=>`
     <tr><td>${esc(v.nombre)}</td><td class="num"><input type="text" inputmode="numeric" class="venta-input" value="${agrupar(v.valor)}"
-      oninput="fmtMiles(this)" onchange="cambiarVenta('${v.id}', this.value)"></td></tr>`).join('')
+      ${esAdmin()? `oninput="fmtMiles(this)" onchange="cambiarVenta('${v.id}', this.value)"` : 'readonly'}></td></tr>`).join('')
     + `<tr><td><b>Total venta estimada</b></td><td class="num"><b>${money(ventas)}</b></td></tr>`;
 
   const ult = [...state.movimientos].sort(byFecha).slice(-8).reverse();
@@ -534,7 +564,7 @@ function renderCaja(){
       <td class="num pos">${m.tipo==='i'? money(m.valor):''}</td>
       <td class="num neg">${m.tipo==='e'? money(m.valor):''}</td>
       <td class="num">${money(m._saldo)}</td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirMov('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarMov('${m.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap">${esAdmin()? `<button class="btn ghost" onclick="abrirMov('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarMov('${m.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`).join('') || '<tr><td colspan="7" class="muted">Sin movimientos.</td></tr>';
 }
 
@@ -555,7 +585,7 @@ function renderInventario(){
       <td class="num">${ent}</td><td class="num">${sal}</td>
       <td class="num ${bajo?'stock-low':''}">${st}</td><td class="num">${m.minimo}</td>
       <td>${bajo? '<span class="tag rojo">⚠ Pedir</span>' : (st>0?'<span class="tag aporte">OK</span>':'<span class="tag">Sin stock</span>')}</td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="event.stopPropagation();abrirMaterial('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarMaterial('${m.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap">${puedeInv()? `<button class="btn ghost" onclick="event.stopPropagation();abrirMaterial('${m.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarMaterial('${m.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" class="muted">Agrega tu primer material.</td></tr>';
 
@@ -565,7 +595,7 @@ function renderInventario(){
       <td style="white-space:nowrap">${fechaCorta(x.fecha)}</td><td>${mat? esc(mat.nombre):'—'}</td>
       <td>${x.tipo==='entrada'? '<span class="tag aporte">▲ Entrada</span>':'<span class="tag rojo">▼ Salida</span>'}</td>
       <td class="num">${x.cantidad} ${mat? esc(mat.unidad):''}</td><td>${esc(x.nota||'')}</td>
-      <td><button class="btn ghost" onclick="borrarMatMov('${x.id}')" aria-label="Eliminar">🗑</button></td>
+      <td>${puedeInv()? `<button class="btn ghost" onclick="borrarMatMov('${x.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="muted">Aún no hay movimientos de inventario. Registra la primera compra de materiales.</td></tr>';
 }
@@ -599,7 +629,7 @@ function renderSocios(){
         <thead><tr><th>Socio</th><th class="num">Le corresponde</th><th class="num">Ya aportó</th><th class="num">Le falta</th><th>Estado</th></tr></thead>
         <tbody>${filas}</tbody>
       </table></div>
-      <div style="margin-top:10px"><button class="btn sec sm" onclick="cerrarLlamado('${lla.id}')">✓ Cerrar este llamado</button></div>
+      ${esAdmin()? `<div style="margin-top:10px"><button class="btn sec sm" onclick="cerrarLlamado('${lla.id}')">✓ Cerrar este llamado</button></div>`:''}
     </div>`;
   } else $('llamadoPanel').innerHTML = '';
 
@@ -619,7 +649,7 @@ function renderSocios(){
       <td class="num">${(pct*100).toFixed(1)}%</td>
       <td><div class="bar"><i style="width:${pAvance}%" class="${pAvance>=100?'':'warn'}"></i></div><span class="muted">${pAvance.toFixed(0)}%</span></td>
       <td class="num">${money(util*pct)}</td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="event.stopPropagation();abrirSocio('${s.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarSocio('${s.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap">${esAdmin()? `<button class="btn ghost" onclick="event.stopPropagation();abrirSocio('${s.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarSocio('${s.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -641,7 +671,7 @@ function renderPresupuesto(){
       <td class="num">${money(e)}</td>
       <td class="num ${c.presupuesto-e<0?'neg':''}">${money(c.presupuesto-e)}</td>
       <td><div class="bar"><i class="${cls}" style="width:${Math.min(p,100)}%"></i></div><span class="muted">${p.toFixed(0)}%</span></td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="event.stopPropagation();abrirCapitulo('${c.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarCapitulo('${c.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap">${esAdmin()? `<button class="btn ghost" onclick="event.stopPropagation();abrirCapitulo('${c.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarCapitulo('${c.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`;
   }).join('');
 }
@@ -659,7 +689,7 @@ function renderCronograma(){
       <td style="white-space:nowrap">${fechaCorta(e.inicio)}</td><td style="white-space:nowrap">${fechaCorta(e.fin)}</td><td>${esc(e.resp||'—')}</td>
       <td><div class="bar"><i style="width:${Math.min(e.avance,100)}%" class="${e.avance>=100?'':'warn'}"></i></div><span class="muted">${e.avance}%</span></td>
       <td class="muted">${esc(e.notas||'')}</td>
-      <td style="white-space:nowrap"><button class="btn ghost" onclick="abrirEtapa('${e.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarEtapa('${e.id}')" aria-label="Eliminar">🗑</button></td>
+      <td style="white-space:nowrap">${esAdmin()? `<button class="btn ghost" onclick="abrirEtapa('${e.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarEtapa('${e.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`).join('');
 }
 
