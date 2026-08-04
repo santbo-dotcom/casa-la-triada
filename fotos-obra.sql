@@ -52,3 +52,9 @@ create policy borrar_fotos_obra on storage.objects for delete
   using (bucket_id = 'fotos-obra' and public.triada_rol() = 'admin');
 
 select 'fotos de la obra configuradas' as estado;
+
+-- (Paso adicional necesario para poder borrar: Storage necesita ver el archivo primero)
+drop policy if exists ver_fotos_obra_objetos on storage.objects;
+create policy ver_fotos_obra_objetos on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'fotos-obra' and public.triada_rol() <> 'ninguno');
