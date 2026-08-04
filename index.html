@@ -248,7 +248,8 @@
     <button class="btn" onclick="abrirSubirFotos()">📷 Subir fotos</button>
     <select id="fotoFiltroEtapa" onchange="renderFotos()"><option value="">Todas las etapas</option></select>
   </div>
-  <input type="file" id="fotoInput" accept="image/*" capture="environment" multiple style="display:none" onchange="archivosSeleccionados(this.files)">
+  <!-- Sin "capture": así iOS/Android ofrecen el menú completo (Fototeca, Tomar foto, Explorar) -->
+  <input type="file" id="fotoInput" accept="image/*" multiple style="display:none" onchange="archivosSeleccionados(this.files)">
   <div id="fotoSubiendo" class="alert warn" style="display:none"></div>
   <div class="panel"><div id="fotoGrid" class="fotogrid"></div></div>
 </section>
@@ -779,6 +780,8 @@ function abrirSubirFotos(){
 function archivosSeleccionados(files){
   if(!files || !files.length) return;
   fotosPendientes = [...files];
+  // Limpiar el input permite volver a elegir la MISMA foto después
+  $('fotoInput').value = '';
   $('fdTitle').textContent = `📷 Subir ${fotosPendientes.length} foto${fotosPendientes.length===1?'':'s'}`;
   $('fdNota').value='';
   dlgFotoDatos.showModal();
@@ -801,7 +804,7 @@ function comprimirImagen(file, maxDim=1600, calidad=0.75){
 async function subirArchivoStorage(path, blob){
   const r = await fetch(cfg.url.replace(/\/+$/,'')+'/storage/v1/object/fotos-obra/'+path, {
     method:'POST',
-    headers:{ 'apikey':cfg.key, 'Authorization':'Bearer '+cfg.key, 'X-Clave':cfg.clave, 'Content-Type':'image/jpeg' },
+    headers:{ 'apikey':cfg.key, 'Authorization':'Bearer '+cfg.key, 'X-Clave':cfg.clave, 'Content-Type': blob.type || 'image/jpeg' },
     body: blob
   });
   if(!r.ok) throw new Error('No se pudo subir la foto ('+r.status+')');
@@ -819,7 +822,9 @@ async function confirmarSubidaFotos(ev){
       barra.textContent = `📤 Subiendo foto ${i+1} de ${archivos.length}…`;
       const blob = await comprimirImagen(archivos[i]);
       const idFoto = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
-      const path = new Date().toISOString().slice(0,10)+'/'+idFoto+'.jpg';
+      // Si la compresión funcionó queda .jpg; si el navegador no pudo (raro), respeta el original
+      const ext = (blob.type==='image/jpeg' || !blob.type) ? 'jpg' : blob.type.split('/')[1].replace('jpeg','jpg');
+      const path = new Date().toISOString().slice(0,10)+'/'+idFoto+'.'+ext;
       await subirArchivoStorage(path, blob);
       await api('POST','fotos_obra', { storage_path:path, etapa_id:etapaId, fecha:new Date().toISOString().slice(0,10), nota, subido_por:NOMBRE_ROL[miRol]||'' });
     }
