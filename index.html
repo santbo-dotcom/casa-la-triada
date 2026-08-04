@@ -98,6 +98,12 @@
   .detcards div{background:var(--bg); border-radius:10px; padding:8px 10px; text-align:center;}
   .detcards .l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;}
   .detcards .v{font-size:14px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .fotogrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px;}
+  .fotogrid .fitem{position:relative; aspect-ratio:1; border-radius:12px; overflow:hidden; cursor:pointer; background:var(--bg); border:1px solid var(--line);}
+  .fotogrid .fitem img{width:100%; height:100%; object-fit:cover; display:block;}
+  .fotogrid .fitem .fetiqueta{position:absolute; left:0; right:0; bottom:0; padding:4px 6px; font-size:10px; color:#fff;
+    background:linear-gradient(transparent,rgba(0,0,0,.65)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #fvImg{max-height:60vh; object-fit:contain; background:var(--bg);}
   dialog{border:none; border-radius:18px; padding:0; max-width:430px; width:calc(100vw - 28px);
     background:var(--card); color:var(--ink); box-shadow:0 24px 70px rgba(0,0,0,.35); margin:auto;}
   dialog::backdrop{background:rgba(10,12,14,.55);}
@@ -144,6 +150,7 @@
     <button data-tab="socios">Socios</button>
     <button data-tab="presupuesto">Presupuesto</button>
     <button data-tab="cronograma">Cronograma</button>
+    <button data-tab="fotos">Fotos</button>
   </nav>
 </header>
 <main>
@@ -235,6 +242,17 @@
   </table></div>
 </section>
 
+<section id="fotos">
+  <div class="cards" id="fotoCards"></div>
+  <div class="toolbar">
+    <button class="btn" onclick="abrirSubirFotos()">📷 Subir fotos</button>
+    <select id="fotoFiltroEtapa" onchange="renderFotos()"><option value="">Todas las etapas</option></select>
+  </div>
+  <input type="file" id="fotoInput" accept="image/*" capture="environment" multiple style="display:none" onchange="archivosSeleccionados(this.files)">
+  <div id="fotoSubiendo" class="alert warn" style="display:none"></div>
+  <div class="panel"><div id="fotoGrid" class="fotogrid"></div></div>
+</section>
+
 </main>
 
 <div class="bottombar">
@@ -319,6 +337,21 @@
   <div class="dlg-actions"><button class="btn">Cerrar</button></div>
 </form></dialog>
 
+<dialog id="dlgFotoDatos"><form method="dialog" onsubmit="confirmarSubidaFotos(event)">
+  <h3 id="fdTitle">📷 Subir fotos</h3>
+  <div class="field"><label>Etapa de la obra (opcional)</label><select id="fdEtapa"><option value="">— Sin etapa —</option></select></div>
+  <div class="field"><label>Nota (opcional)</label><input id="fdNota" placeholder="Ej: fundida de placa piso 1"></div>
+  <p class="muted" style="margin-bottom:10px">Se aplicará a todas las fotos seleccionadas.</p>
+  <div class="dlg-actions"><button type="button" class="btn sec" onclick="dlgFotoDatos.close()">Cancelar</button><button class="btn">Subir</button></div>
+</form></dialog>
+
+<dialog id="dlgFotoVer"><form method="dialog">
+  <h3 id="fvTitle">Foto</h3>
+  <img id="fvImg" style="width:100%;border-radius:12px;margin-bottom:10px;display:block" alt="Foto de la obra">
+  <p class="muted" id="fvMeta" style="margin-bottom:14px"></p>
+  <div class="dlg-actions" id="fvAcciones"><button class="btn sec" id="fvBtnBorrar">🗑 Eliminar</button><button class="btn">Cerrar</button></div>
+</form></dialog>
+
 <dialog id="dlgLlamado"><form method="dialog" onsubmit="guardarLlamado(event)">
   <h3>🔔 Solicitar nuevo aporte</h3>
   <div class="field"><label>Nombre del llamado</label><input id="llaNombre" required placeholder="Ej: Aporte 10% para pilotes — Julio"></div>
@@ -369,7 +402,7 @@ const fmt = new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maxim
 const $ = id => document.getElementById(id);
 const CATS_INGRESO = ['Aporte Social','Venta Inmueble','Otros Ingresos'];
 
-let state = { movimientos:[], materiales:[], movInventario:[], socios:[], capitulos:[], etapas:[], ventas:[], llamados:[] };
+let state = { movimientos:[], materiales:[], movInventario:[], socios:[], capitulos:[], etapas:[], ventas:[], llamados:[], fotos:[] };
 let ocupado = false;
 let miRol = 'ninguno';
 const esAdmin = () => miRol==='admin';
@@ -421,7 +454,11 @@ async function cargarTodo(){
     etapas: eta.map(e=>({...e, inicio:e.inicio||'', fin:e.fin||'', resp:e.resp||'', avance:+e.avance||0, notas:e.notas||''})),
     ventas: ven.map(v=>({...v, valor:+v.valor})),
     llamados: (lla||[]).map(l=>({...l, valor:+l.valor, activo:l.activo!==false})),
+    fotos: [],
   };
+  // La tabla de fotos es opcional (requiere el SQL de fotos-obra.sql). Si no existe aún, la app sigue funcionando igual.
+  try{ state.fotos = await api('GET','fotos_obra?select=*&order=fecha.desc,creado.desc'); SETUP_FOTOS_LISTO = true; }
+  catch(e){ state.fotos = []; SETUP_FOTOS_LISTO = false; }
 }
 // ----- Llamados de aportes (capital calls) -----
 function llamadoActivo(){ return state.llamados.find(l=>l.activo); }
@@ -489,7 +526,7 @@ function aplicarPermisos(){
 
 function render(){
   $('hdrSaldo').textContent = money(saldo());
-  renderResumen(); renderCaja(); renderInventario(); renderSocios(); renderPresupuesto(); renderCronograma();
+  renderResumen(); renderCaja(); renderInventario(); renderSocios(); renderPresupuesto(); renderCronograma(); renderFotos();
   aplicarPermisos();
 }
 
@@ -701,6 +738,119 @@ function renderCronograma(){
       <td class="muted">${esc(e.notas||'')}</td>
       <td style="white-space:nowrap">${esAdmin()? `<button class="btn ghost" onclick="abrirEtapa('${e.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="borrarEtapa('${e.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`).join('');
+}
+
+function urlFoto(path){ return cfg.url.replace(/\/+$/,'')+'/storage/v1/object/public/fotos-obra/'+path; }
+function renderFotos(){
+  const cont = $('fotoGrid'); if(!cont) return;
+  const sel = $('fotoFiltroEtapa'); const cur = sel.value;
+  sel.innerHTML = '<option value="">Todas las etapas</option>' + state.etapas.map(e=>`<option value="${e.id}" ${e.id===cur?'selected':''}>${esc(e.nombre)}</option>`).join('');
+
+  const tablaLista = document.querySelector('#dlgFotoDatos') && $('fdEtapa');
+  if(tablaLista) $('fdEtapa').innerHTML = '<option value="">— Sin etapa —</option>' + state.etapas.map(e=>`<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+
+  $('fotoCards').innerHTML = `
+    <div class="card"><div class="lbl">Fotos totales</div><div class="val">${state.fotos.length}</div></div>
+    <div class="card"><div class="lbl">Etapas con fotos</div><div class="val">${new Set(state.fotos.filter(f=>f.etapa_id).map(f=>f.etapa_id)).size}</div></div>`;
+
+  if(!SETUP_FOTOS_LISTO){
+    cont.innerHTML = '<p class="muted" style="padding:12px 4px">📷 Esta función necesita un paso de configuración único. Pide a Santiago que corra <b>fotos-obra.sql</b> en Supabase.</p>';
+    return;
+  }
+  const fc = sel.value;
+  const lista = state.fotos.filter(f=> !fc || f.etapa_id===fc);
+  cont.innerHTML = lista.map(f=>{
+    const et = state.etapas.find(e=>e.id===f.etapa_id);
+    return `<div class="fitem" onclick="verFotoGrande('${f.id}')">
+      <img src="${urlFoto(f.storage_path)}" loading="lazy" alt="${esc(f.nota||'Foto de la obra')}">
+      <div class="fetiqueta">${et? esc(et.nombre) : fechaCorta(f.fecha)}</div>
+    </div>`;
+  }).join('') || '<p class="muted" style="padding:12px 4px">Aún no hay fotos. Toca "📷 Subir fotos" para agregar las primeras.</p>';
+}
+
+// ----- Fotos de la obra -----
+let SETUP_FOTOS_LISTO = true; // se pone en false automáticamente si falta el SQL
+let fotosPendientes = [];
+
+function abrirSubirFotos(){
+  if(!SETUP_FOTOS_LISTO){ alert('Falta un paso de configuración único en Supabase (fotos-obra.sql). Avísale a Santiago.'); return; }
+  $('fotoInput').click();
+}
+function archivosSeleccionados(files){
+  if(!files || !files.length) return;
+  fotosPendientes = [...files];
+  $('fdTitle').textContent = `📷 Subir ${fotosPendientes.length} foto${fotosPendientes.length===1?'':'s'}`;
+  $('fdNota').value='';
+  dlgFotoDatos.showModal();
+}
+function comprimirImagen(file, maxDim=1600, calidad=0.75){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let {width:w, height:h} = img;
+      if(w>maxDim || h>maxDim){ const r = Math.min(maxDim/w, maxDim/h); w=Math.round(w*r); h=Math.round(h*r); }
+      const canvas = document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      canvas.toBlob(blob=>{ URL.revokeObjectURL(url); resolve(blob||file); }, 'image/jpeg', calidad);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+async function subirArchivoStorage(path, blob){
+  const r = await fetch(cfg.url.replace(/\/+$/,'')+'/storage/v1/object/fotos-obra/'+path, {
+    method:'POST',
+    headers:{ 'apikey':cfg.key, 'Authorization':'Bearer '+cfg.key, 'X-Clave':cfg.clave, 'Content-Type':'image/jpeg' },
+    body: blob
+  });
+  if(!r.ok) throw new Error('No se pudo subir la foto ('+r.status+')');
+}
+async function confirmarSubidaFotos(ev){
+  ev.preventDefault();
+  const etapaId = $('fdEtapa').value || null;
+  const nota = $('fdNota').value.trim();
+  const archivos = fotosPendientes; fotosPendientes = [];
+  dlgFotoDatos.close();
+  if(!archivos.length) return;
+  const barra = $('fotoSubiendo'); barra.style.display=''; ocupado = true;
+  try{
+    for(let i=0;i<archivos.length;i++){
+      barra.textContent = `📤 Subiendo foto ${i+1} de ${archivos.length}…`;
+      const blob = await comprimirImagen(archivos[i]);
+      const idFoto = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+      const path = new Date().toISOString().slice(0,10)+'/'+idFoto+'.jpg';
+      await subirArchivoStorage(path, blob);
+      await api('POST','fotos_obra', { storage_path:path, etapa_id:etapaId, fecha:new Date().toISOString().slice(0,10), nota, subido_por:NOMBRE_ROL[miRol]||'' });
+    }
+    barra.style.display='none';
+    await cargarTodo(); render();
+  }catch(e){
+    barra.style.display='none';
+    if(String(e.message).includes('404')||String(e.message).includes('fotos_obra')||String(e.message).includes('fotos-obra')){
+      SETUP_FOTOS_LISTO = false; render();
+    }
+    alert('No se pudieron subir todas las fotos.\n\nDetalle: '+e.message);
+  } finally { ocupado = false; }
+}
+function verFotoGrande(id){
+  const f = state.fotos.find(x=>x.id===id); if(!f) return;
+  const et = state.etapas.find(e=>e.id===f.etapa_id);
+  $('fvTitle').textContent = et? et.nombre : 'Foto de la obra';
+  $('fvImg').src = urlFoto(f.storage_path);
+  $('fvMeta').innerHTML = `${fechaCorta(f.fecha)}${f.subido_por? ' · subida por '+esc(f.subido_por):''}${f.nota? '<br>'+esc(f.nota):''}`;
+  $('fvBtnBorrar').style.display = esAdmin()? '' : 'none';
+  $('fvBtnBorrar').onclick = (e)=>{ e.preventDefault(); borrarFoto(f.id, f.storage_path); };
+  dlgFotoVer.showModal();
+}
+async function borrarFoto(id, path){
+  if(!confirm('¿Eliminar esta foto para todos?')) return;
+  const ok = await escribir(async ()=>{
+    await fetch(cfg.url.replace(/\/+$/,'')+'/storage/v1/object/fotos-obra/'+path, {
+      method:'DELETE', headers:{ 'apikey':cfg.key, 'Authorization':'Bearer '+cfg.key, 'X-Clave':cfg.clave } });
+    await api('DELETE','fotos_obra?id=eq.'+id);
+  });
+  if(ok) dlgFotoVer.close();
 }
 
 // ================== CRUD ==================
