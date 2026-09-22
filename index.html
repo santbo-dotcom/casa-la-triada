@@ -403,6 +403,19 @@ try{ cfg = JSON.parse(localStorage.getItem(CFG_KEY)||'null'); }catch(e){}
 if(cfg && cfg.v !== SESION_V){ cfg = null; localStorage.removeItem(CFG_KEY); }
 if(cfg){ if(BAKED_URL) cfg.url = BAKED_URL; if(BAKED_KEY) cfg.key = BAKED_KEY; }
 
+// Enlace de acceso directo: https://…/?clave=TU_CLAVE — guarda la sesión y limpia la clave de la barra de direcciones.
+(function(){
+  const params = new URLSearchParams(location.search);
+  const claveUrl = params.get('clave');
+  if(claveUrl){
+    cfg = { url: BAKED_URL, key: BAKED_KEY, clave: claveUrl, v: SESION_V };
+    localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+    params.delete('clave');
+    const limpio = location.pathname + (params.toString()? '?'+params.toString():'') + location.hash;
+    history.replaceState({}, '', limpio);
+  }
+})();
+
 const fmt = new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0});
 const $ = id => document.getElementById(id);
 const CATS_INGRESO = ['Aporte Social','Venta Inmueble','Otros Ingresos'];
