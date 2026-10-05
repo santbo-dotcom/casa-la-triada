@@ -610,18 +610,32 @@ function renderCaja(){
   sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('');
   const fc = sel.value;
 
-  $('cajaCards').innerHTML = `
-    <div class="card good"><div class="lbl">Total ingresos</div><div class="val">${money(totIngresos())}</div></div>
-    <div class="card bad"><div class="lbl">Total egresos</div><div class="val">${money(totEgresos())}</div></div>
-    <div class="card"><div class="lbl">Saldo</div><div class="val">${money(saldo())}</div></div>
-    <div class="card"><div class="lbl">Movimientos</div><div class="val">${state.movimientos.length}</div></div>`;
-
   const orden = [...state.movimientos].sort(byFecha);
   let s = 0; const conSaldo = orden.map(m=>{ s += m.tipo==='i'? m.valor : -m.valor; return {...m, _saldo:s}; });
   const rows = conSaldo.filter(m=>
     (!q || m.concepto.toLowerCase().includes(q)) && (!ft || m.tipo===ft) && (!fc || m.categoria===fc)
   ).reverse();
-  $('cajaBody').innerHTML = rows.map(m=>`
+
+  // Las tarjetas y el total de la tabla suman solo lo que se ve (lo filtrado)
+  const filtrado = !!(q || ft || fc);
+  const fIng = rows.filter(m=>m.tipo==='i').reduce((a,m)=>a+m.valor,0);
+  const fEgr = rows.filter(m=>m.tipo==='e').reduce((a,m)=>a+m.valor,0);
+  const tag = filtrado ? ' <span style="color:var(--brand)">· filtrado</span>' : '';
+  $('cajaCards').innerHTML = `
+    <div class="card good"><div class="lbl">Total ingresos${tag}</div><div class="val">${money(fIng)}</div></div>
+    <div class="card bad"><div class="lbl">Total egresos${tag}</div><div class="val">${money(fEgr)}</div></div>
+    <div class="card"><div class="lbl">${filtrado? 'Neto filtrado' : 'Saldo'}</div><div class="val">${money(fIng-fEgr)}</div></div>
+    <div class="card"><div class="lbl">Movimientos${tag}</div><div class="val">${rows.length}${filtrado? `<span class="muted"> de ${state.movimientos.length}</span>`:''}</div></div>`;
+
+  const filaTotal = rows.length ? `
+    <tr style="background:var(--bg)">
+      <td colspan="3"><b>Total${filtrado? ' de lo filtrado':''} (${rows.length} movimiento${rows.length===1?'':'s'})</b></td>
+      <td class="num pos"><b>${fIng? money(fIng):''}</b></td>
+      <td class="num neg"><b>${fEgr? money(fEgr):''}</b></td>
+      <td class="num"><b>${money(fIng-fEgr)}</b></td>
+      <td></td>
+    </tr>` : '';
+  $('cajaBody').innerHTML = filaTotal + rows.map(m=>`
     <tr>
       <td style="white-space:nowrap">${fechaCorta(m.fecha)}</td>
       <td>${esc(m.concepto)}${m.socio?`<br><span class="muted">👤 ${esc(m.socio)}</span>`:''}</td>
