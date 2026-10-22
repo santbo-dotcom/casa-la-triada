@@ -230,6 +230,7 @@
     <thead><tr><th>Socio</th><th class="num">Compromiso</th><th class="num">Aportado</th><th class="num">Pendiente</th><th class="num">% Part.</th><th>Avance</th><th class="num">Utilidad proy.</th><th></th></tr></thead>
     <tbody id="socBody"></tbody>
   </table></div>
+  <div id="retornoPanel"></div>
 </section>
 
 <section id="presupuesto">
@@ -684,6 +685,68 @@ function renderInventario(){
   }).join('') || '<tr><td colspan="6" class="muted">Aún no hay movimientos de inventario. Registra la primera compra de materiales.</td></tr>';
 }
 
+// ----- Retorno de cada socio al momento de la venta (según su % de participación) -----
+const TASA_CUENTA = 0.01; // cuenta de alto rendimiento en Colombia: 1% mensual (interés compuesto)
+function fechaVentaEstimada(){
+  const hoy = new Date().toISOString().slice(0,10);
+  const fines = state.etapas.map(e=>e.fin).filter(Boolean).sort();
+  const ult = fines.length? fines[fines.length-1] : '';
+  return ult && ult>hoy ? {fecha:ult, deCronograma:true} : {fecha:hoy, deCronograma:false};
+}
+function mesesEntre(f1, f2){ return Math.max((new Date(f2)-new Date(f1))/(86400000*30.4375),0); }
+function calcRetorno(){
+  const totComp = state.socios.reduce((a,x)=>a+x.compromiso,0);
+  const venta = state.ventas.reduce((a,v)=>a+v.valor,0);
+  const costo = state.capitulos.reduce((a,c)=>a+c.presupuesto,0);
+  const fv = fechaVentaEstimada(); const hoy = new Date().toISOString().slice(0,10);
+  const filas = state.socios.map(x=>{
+    const pct = totComp? x.compromiso/totComp : 0;
+    const miCosto = costo*pct, recibe = venta*pct, ganancia = recibe-miCosto;
+    // Lo que habría rendido su plata en la cuenta: cada aporte desde su fecha; lo pendiente, como si entrara hoy
+    const aportes = state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social'&&m.socio===x.nombre);
+    let enCuenta = 0, aportado = 0;
+    aportes.forEach(m=>{ aportado+=m.valor; enCuenta += m.valor*(Math.pow(1+TASA_CUENTA, mesesEntre(m.fecha, fv.fecha))-1); });
+    const pendiente = Math.max(miCosto-aportado,0);
+    enCuenta += pendiente*(Math.pow(1+TASA_CUENTA, mesesEntre(hoy, fv.fecha))-1);
+    return { s:x, pct, miCosto, recibe, ganancia, roi: miCosto? ganancia/miCosto*100 : 0, enCuenta, vsCuenta: ganancia-enCuenta };
+  });
+  const primero = state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social').map(m=>m.fecha).sort()[0] || hoy;
+  return { venta, costo, util: venta-costo, filas, fv, meses: mesesEntre(primero, fv.fecha), primero };
+}
+function renderRetorno(){
+  const r = calcRetorno();
+  const roiTotal = r.costo? r.util/r.costo*100 : 0;
+  const tot = r.filas.reduce((a,f)=>({miCosto:a.miCosto+f.miCosto, recibe:a.recibe+f.recibe, ganancia:a.ganancia+f.ganancia, enCuenta:a.enCuenta+f.enCuenta, vsCuenta:a.vsCuenta+f.vsCuenta}),{miCosto:0,recibe:0,ganancia:0,enCuenta:0,vsCuenta:0});
+  $('retornoPanel').innerHTML = `<div class="socpanel" style="border-left-color:var(--good)">
+    <h3>💰 Retorno al vender</h3>
+    <div class="muted">Cada socio recibe de la venta según su % de participación. Cambia los precios de venta en el Resumen y esto se recalcula.</div>
+    <div class="detcards" style="margin-top:10px">
+      <div><div class="l">Venta estimada</div><div class="v">${money(r.venta)}</div></div>
+      <div><div class="l">Costo total</div><div class="v">${money(r.costo)}</div></div>
+      <div><div class="l">Utilidad · ${roiTotal.toFixed(1)}%</div><div class="v" style="color:${r.util>=0?'var(--good)':'var(--bad)'}">${money(r.util)}</div></div>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Socio</th><th class="num">% Part.</th><th class="num">Su parte del costo</th><th class="num">Recibe de la venta</th><th class="num">Ganancia</th><th class="num">Retorno</th><th class="num">En cuenta al ${(TASA_CUENTA*100).toFixed(0)}% mensual</th><th class="num">Gana de más</th></tr></thead>
+      <tbody>${r.filas.map(f=>`<tr class="clic" onclick="verDetalleSocio('${f.s.id}')" title="Toca para ver sus aportes">
+        <td><b>${esc(f.s.nombre)}</b></td>
+        <td class="num">${(f.pct*100).toFixed(1)}%</td>
+        <td class="num">${money(f.miCosto)}</td>
+        <td class="num"><b>${money(f.recibe)}</b></td>
+        <td class="num ${f.ganancia>=0?'pos':'neg'}">${money(f.ganancia)}</td>
+        <td class="num ${f.roi>=0?'pos':'neg'}">${f.roi.toFixed(1)}%</td>
+        <td class="num">${money(f.enCuenta)}</td>
+        <td class="num ${f.vsCuenta>=0?'pos':'neg'}">${money(f.vsCuenta)}</td></tr>`).join('')}
+        <tr style="background:var(--bg)"><td><b>Total</b></td><td class="num"><b>100%</b></td>
+          <td class="num"><b>${money(tot.miCosto)}</b></td><td class="num"><b>${money(tot.recibe)}</b></td>
+          <td class="num ${tot.ganancia>=0?'pos':'neg'}"><b>${money(tot.ganancia)}</b></td><td class="num"><b>${roiTotal.toFixed(1)}%</b></td>
+          <td class="num"><b>${money(tot.enCuenta)}</b></td><td class="num ${tot.vsCuenta>=0?'pos':'neg'}"><b>${money(tot.vsCuenta)}</b></td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted" style="margin-top:8px">📅 <b>Comparación con una cuenta de alto rendimiento (${(TASA_CUENTA*100).toFixed(0)}% mensual):</b> cada aporte rinde desde su fecha hasta la venta (${fechaCorta(r.fv.fecha)}, ${r.meses.toFixed(1)} meses desde el primer aporte); lo que aún falta por aportar se cuenta como si entrara hoy. ${r.fv.deCronograma? 'La fecha de venta es la última fecha de fin del Cronograma.' : '<b>No hay una fecha de fin futura en el Cronograma, así que se usa hoy como corte;</b> ponle fecha a la etapa "Limpieza y entrega" para proyectarlo a la venta.'}</p>
+    <p class="muted" style="margin-top:8px">El % de cada socio es su compromiso sobre el total comprometido. "Su parte del costo" es ese % del presupuesto total; "Recibe de la venta" es ese % de la venta estimada, así que incluye su capital más su ganancia.</p>
+  </div>`;
+}
+
 function renderSocios(){
   const totComp = state.socios.reduce((a,s)=>a+s.compromiso,0);
   const totApo = state.socios.reduce((a,s)=>a+aportadoDe(s.nombre),0);
@@ -736,6 +799,7 @@ function renderSocios(){
       <td style="white-space:nowrap">${esAdmin()? `<button class="btn ghost" onclick="event.stopPropagation();abrirSocio('${s.id}')" aria-label="Editar">✏️</button><button class="btn ghost" onclick="event.stopPropagation();borrarSocio('${s.id}')" aria-label="Eliminar">🗑</button>`:''}</td>
     </tr>`;
   }).join('');
+  renderRetorno();
 }
 
 function renderPresupuesto(){
@@ -1057,11 +1121,22 @@ function verDetalleSocio(id){
   const items = state.movimientos.filter(m=>m.tipo==='i'&&m.categoria==='Aporte Social'&&m.socio===s.nombre).sort(byFecha);
   const total = items.reduce((a,m)=>a+m.valor,0);
   const pend = Math.max(s.compromiso-total,0);
+  const rf = calcRetorno().filas.find(f=>f.s.id===s.id);
   $('detTitle').textContent = '👤 '+s.nombre;
   $('detResumen').innerHTML = `<div class="detcards">
     <div><div class="l">Compromiso</div><div class="v">${money(s.compromiso)}</div></div>
     <div><div class="l">Aportado</div><div class="v" style="color:var(--good)">${money(total)}</div></div>
     <div><div class="l">Pendiente</div><div class="v" style="color:${pend>0?'var(--bad)':'var(--good)'}">${money(pend)}</div></div>
+  </div>
+  <div class="detcards">
+    <div><div class="l">Recibe de la venta</div><div class="v">${money(rf? rf.recibe:0)}</div></div>
+    <div><div class="l">Ganancia</div><div class="v" style="color:${rf&&rf.ganancia<0?'var(--bad)':'var(--good)'}">${money(rf? rf.ganancia:0)}</div></div>
+    <div><div class="l">Retorno</div><div class="v">${rf? rf.roi.toFixed(1):'0.0'}%</div></div>
+  </div>
+  <div class="detcards">
+    <div><div class="l">En cuenta ${(TASA_CUENTA*100).toFixed(0)}% mensual</div><div class="v">${money(rf? rf.enCuenta:0)}</div></div>
+    <div><div class="l">Gana de más</div><div class="v" style="color:${rf&&rf.vsCuenta<0?'var(--bad)':'var(--good)'}">${money(rf? rf.vsCuenta:0)}</div></div>
+    <div><div class="l">Su parte del costo</div><div class="v">${money(rf? rf.miCosto:0)}</div></div>
   </div>`;
   let acum=0;
   $('detBody').innerHTML = items.length ? `<table>
@@ -1183,9 +1258,11 @@ function exportarExcel(){
       return [x.fecha, mat?mat.nombre:'', x.tipo, +x.cantidad, x.nota||'']; })];
   const totComp = state.socios.reduce((a,x)=>a+x.compromiso,0);
   const util = state.ventas.reduce((a,v)=>a+v.valor,0) - state.capitulos.reduce((a,c)=>a+c.presupuesto,0);
-  const hSoc = [['Socio','Compromiso','Aportado','Pendiente','% Participación','Utilidad proyectada'],
+  const hSoc = [['Socio','Compromiso','Aportado','Pendiente','% Participación','Utilidad proyectada','Parte del costo','Recibe de la venta','Ganancia','Retorno %','En cuenta 1% mensual','Gana de más'],
     ...state.socios.map(x=>{ const ap=aportadoDe(x.nombre); const pct= totComp? x.compromiso/totComp:0;
-      return [x.nombre, x.compromiso, ap, Math.max(x.compromiso-ap,0), +(pct*100).toFixed(2), Math.round(util*pct)]; })];
+      const rf = calcRetorno().filas.find(f=>f.s.id===x.id);
+      return [x.nombre, x.compromiso, ap, Math.max(x.compromiso-ap,0), +(pct*100).toFixed(2), Math.round(util*pct),
+        Math.round(rf.miCosto), Math.round(rf.recibe), Math.round(rf.ganancia), +rf.roi.toFixed(1), Math.round(rf.enCuenta), Math.round(rf.vsCuenta)]; })];
   const hPre = [['Capítulo','Presupuesto','Ejecutado','Disponible','% Ejecutado'],
     ...state.capitulos.map(c=>{ const e=ejecutadoDe(c.nombre);
       return [c.nombre, c.presupuesto, e, c.presupuesto-e, c.presupuesto? +((e/c.presupuesto)*100).toFixed(1) : '']; })];
